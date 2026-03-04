@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/*.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/",
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/vote",
+      "dest": "/api/vote.py"
+    },
+    {
+      "src": "/results",
+      "dest": "/api/results.py"
+    },
+    {
+      "src": "/protocol",
+      "dest": "/api/protocol.py"
+    }
+  ]
+}
