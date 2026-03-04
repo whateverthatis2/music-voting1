@@ -7,7 +7,7 @@ PROTOCOL_PASSWORD = "0000"
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        # GET — завжди показуємо форму (немає сесій!)
+        # GET — завжди показуємо форму
         self._send_password_form()
     
     def do_POST(self):
@@ -30,20 +30,24 @@ class handler(BaseHTTPRequestHandler):
         db = load_db()
         votes = db.get('votes', [])
         
+        # Формуємо записи
         entries = ""
         for v in votes:
             entries += f"""
-            <div style="background: #2d3748; padding: 15px; margin: 10px 0; 
-                        border-left: 3px solid #48bb78; font-family: monospace;">
-                <div style="color: #a0aec0;">[{v.get('timestamp', 'N/A')}] ID: {v.get('id', 'N/A')}</div>
+            <div class="entry">
+                <div class="timestamp">[{v.get('timestamp', 'N/A')}] ID: {v.get('id', 'N/A')}</div>
                 <div>Порівняння: {v.get('comparison', 'N/A')}</div>
-                <div style="color: #ed8936; word-break: break-all;">
+                <div class="hash">
                     Публічний: {v.get('public_hash', 'N/A')}<br>
                     Приватний: {v.get('private_hash', 'N/A')}
                 </div>
             </div>"""
         
-        db_status = "✅ OK" if db.get('ok') else f"⚠️ {db.get('error', 'Помилка')}"
+        # Статус БД (не показуємо "Помилка" якщо дані є)
+        if len(votes) > 0:
+            db_status = f"✅ Підключено | Записів: {len(votes)}"
+        else:
+            db_status = "⚠️ Немає записів" if not db.get('ok') else "✅ Підключено | Записів: 0"
         
         html = f"""<!DOCTYPE html>
 <html lang="uk">
@@ -57,6 +61,7 @@ class handler(BaseHTTPRequestHandler):
             color: #48bb78;
             padding: 40px;
             line-height: 1.6;
+            margin: 0;
         }}
         .container {{
             max-width: 900px;
@@ -65,21 +70,42 @@ class handler(BaseHTTPRequestHandler):
             padding: 30px;
             border-radius: 10px;
         }}
-        h1 {{ color: #fff; border-bottom: 2px solid #48bb78; padding-bottom: 10px; }}
-        a {{ color: #63b3ed; }}
-        .back {{
-            color: #a0aec0;
+        h1 {{
+            color: #fff;
+            border-bottom: 2px solid #48bb78;
+            padding-bottom: 10px;
+            margin-top: 0;
+        }}
+        a {{
+            color: #63b3ed;
             text-decoration: none;
+        }}
+        .back {{
+            float: right;
+            color: #a0aec0;
             font-size: 0.9em;
         }}
         .db-status {{
-            background: {'#1a472a' if db.get('ok') else '#742a2a'};
-            color: {'#48bb78' if db.get('ok') else '#fc8181'};
+            background: #1a472a;
+            color: #48bb78;
             padding: 10px;
             border-radius: 5px;
             margin-bottom: 20px;
             font-family: sans-serif;
             font-size: 0.9em;
+        }}
+        .entry {{
+            background: #2d3748;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 3px solid #48bb78;
+        }}
+        .timestamp {{
+            color: #a0aec0;
+        }}
+        .hash {{
+            color: #ed8936;
+            word-break: break-all;
         }}
     </style>
 </head>
@@ -89,7 +115,7 @@ class handler(BaseHTTPRequestHandler):
             🔐 ПРОТОКОЛ ГОЛОСУВАННЯ
             <a href="/" class="back">[← Назад]</a>
         </h1>
-        <div class="db-status">Статус БД: {db_status} | Записів: {len(votes)}</div>
+        <div class="db-status">{db_status}</div>
         {entries}
     </div>
 </body>
