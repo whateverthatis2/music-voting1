@@ -20,6 +20,10 @@
       "dest": "/api/results.py"
     },
     {
+      "src": "/protocol/logout",
+      "dest": "/api/protocol_logout.py"
+    },
+    {
       "src": "/protocol",
       "dest": "/api/protocol.py"
     }
