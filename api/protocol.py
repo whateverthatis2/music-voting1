@@ -5,7 +5,7 @@ import secrets
 import time
 
 # Хардкордний пароль (зміни на свій)
-PROTOCOL_PASSWORD = "teacher2024"
+PROTOCOL_PASSWORD = "0000"
 
 # Активні сесії (в пам'яті — при перезапуску сервера скидаються)
 active_sessions = {}
@@ -221,3 +221,4 @@ class handler(BaseHTTPRequestHandler):
         self.send_header('Content-type', 'text/html; charset=utf-8')
         self.end_headers()
         self.wfile.write(html.encode('utf-8'))
+
