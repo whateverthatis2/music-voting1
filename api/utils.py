@@ -263,11 +263,12 @@ def html_template(title, content):
     <div class="container">
         <div class="header">
             <h1>🎵 Експертне опитування</h1>
-            <p>Пріоритизація жанрів української музики (ID-анонімність)</p>
+            <p>Пріоритизація жанрів музики</p>
         </div>
         <div class="content">
             {content}
         </div>
     </div>
 </body>
+
 </html>"""
