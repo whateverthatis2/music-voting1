@@ -83,7 +83,7 @@ class handler(BaseHTTPRequestHandler):
         
         <div class="links">
             <a href="/results">📊 Результати</a>
-            <a href="/protocol">📋 Протокол</a>
+            <a href="/protocol" onclick="alert('Потрібен пароль'); return true;">📋 Протокол (захищено)</a>
         </div>
         
         <script>
@@ -135,4 +135,5 @@ class handler(BaseHTTPRequestHandler):
         '''
         
         html = html_template("Експертне опитування", content)
+
         self.wfile.write(html.encode('utf-8'))
