@@ -59,11 +59,7 @@ class handler(BaseHTTPRequestHandler):
     def _show_protocol(self):
         """Показати протокол (тільки з валідною сесією)"""
         db = load_db()
-        votes = db['votes']
-        
-        if not db.get('ok'):
-            self._send_error("Помилка бази даних")
-            return
+        votes = db['votes']  # Покажемо що є, навіть якщо помилка
         
         entries = ""
         for v in votes:
@@ -77,6 +73,67 @@ class handler(BaseHTTPRequestHandler):
                     Приватний: {v['private_hash']}
                 </div>
             </div>"""
+        
+        # Повідомлення про статус БД
+        db_status = "✅ Підключено" if db.get('ok') else f"⚠️ {db.get('error', 'Помилка БД')}"
+        
+        html = f"""<!DOCTYPE html>
+    <html lang="uk">
+    <head>
+        <meta charset="UTF-8">
+        <title>Протокол</title>
+        <style>
+            body {{
+                font-family: 'Courier New', monospace;
+                background: #1a202c;
+                color: #48bb78;
+                padding: 40px;
+                line-height: 1.6;
+            }}
+            .container {{
+                max-width: 900px;
+                margin: 0 auto;
+                background: #2d3748;
+                padding: 30px;
+                border-radius: 10px;
+            }}
+            h1 {{ color: #fff; border-bottom: 2px solid #48bb78; padding-bottom: 10px; }}
+            a {{ color: #63b3ed; }}
+            .logout {{
+                float: right;
+                color: #ed8936;
+                text-decoration: none;
+                font-size: 0.9em;
+            }}
+            .db-status {{
+                background: {'#1a472a' if db.get('ok') else '#742a2a'};
+                color: {'#48bb78' if db.get('ok') else '#fc8181'};
+                padding: 10px;
+                border-radius: 5px;
+                margin-bottom: 20px;
+                font-family: sans-serif;
+                font-size: 0.9em;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>
+                🔐 ПРОТОКОЛ ГОЛОСУВАННЯ
+                <a href="/protocol/logout" class="logout">[Вийти]</a>
+            </h1>
+            <div class="db-status">Статус БД: {db_status}</div>
+            <p>Записів: {len(votes)}</p>
+            {entries}
+            <p><a href="/">← Назад</a></p>
+        </div>
+    </body>
+    </html>"""
+        
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html; charset=utf-8')
+        self.end_headers()
+        self.wfile.write(html.encode('utf-8'))
         
         html = f"""<!DOCTYPE html>
 <html lang="uk">
@@ -221,4 +278,5 @@ class handler(BaseHTTPRequestHandler):
         self.send_header('Content-type', 'text/html; charset=utf-8')
         self.end_headers()
         self.wfile.write(html.encode('utf-8'))
+
 
