@@ -8,13 +8,12 @@ class handler(BaseHTTPRequestHandler):
         self.send_header('Content-type', 'text/html; charset=utf-8')
         self.end_headers()
         
-        # Формуємо список евристик для JS
         heuristics_json = json.dumps(HEURISTICS, ensure_ascii=False)
         
         content = f'''
         <div class="info-box">
             <strong>📋 Лабораторна робота №2:</strong> Оберіть 2 евристики для звуження підмножини жанрів. 
-            Перетягніть або клікніть для вибору.
+            Перетягніть або клікніть для вибору. Обрані евристики можна перетягувати між собою.
         </div>
         
         <div class="heuristics-container">
@@ -25,13 +24,13 @@ class handler(BaseHTTPRequestHandler):
             <div class="priority-panel">
                 <div class="priority-title">🎯 Обрані евристики</div>
                 <div class="priority-slots">
-                    <div class="priority-slot" id="slot1" data-slot="1">
+                    <div class="priority-slot" id="slot1" data-slot="1" draggable="false">
                         <span class="slot-num">1</span>
-                        <span class="slot-text">Клікніть або перетягніть</span>
+                        <span class="slot-content">Клікніть або перетягніть</span>
                     </div>
-                    <div class="priority-slot" id="slot2" data-slot="2">
+                    <div class="priority-slot" id="slot2" data-slot="2" draggable="false">
                         <span class="slot-num">2</span>
-                        <span class="slot-text">Клікніть або перетягніть</span>
+                        <span class="slot-content">Клікніть або перетягніть</span>
                     </div>
                 </div>
             </div>
@@ -50,9 +49,14 @@ class handler(BaseHTTPRequestHandler):
         <style>
             .heuristics-container {{
                 display: grid;
-                grid-template-columns: 2fr 1fr;
+                grid-template-columns: 1fr;
                 gap: 20px;
                 margin-bottom: 20px;
+            }}
+            @media (min-width: 768px) {{
+                .heuristics-container {{
+                    grid-template-columns: 2fr 1fr;
+                }}
             }}
             .heuristics-list {{
                 display: flex;
@@ -71,13 +75,11 @@ class handler(BaseHTTPRequestHandler):
                 border-color: #5a67d8;
                 background: #e0e7ff;
             }}
-            .heuristic-item.selected {{
-                background: #c6f6d5;
-                border-color: #48bb78;
+            .heuristic-item.dragging {{
+                opacity: 0.5;
             }}
             .heuristic-item.in-priority {{
-                opacity: 0.6;
-                pointer-events: none;
+                display: none;
             }}
             .heuristic-id {{
                 font-weight: bold;
@@ -112,48 +114,78 @@ class handler(BaseHTTPRequestHandler):
                 background: white;
                 border: 2px dashed #cbd5e0;
                 border-radius: 6px;
-                padding: 20px;
-                text-align: center;
+                padding: 15px;
                 min-height: 80px;
                 display: flex;
                 flex-direction: column;
                 align-items: center;
                 justify-content: center;
                 transition: all 0.2s;
+                position: relative;
             }}
             .priority-slot.filled {{
                 border-style: solid;
                 border-color: #48bb78;
                 background: #f0fff4;
+                cursor: grab;
+            }}
+            .priority-slot.filled.dragging {{
+                opacity: 0.5;
+            }}
+            .priority-slot.drag-over {{
+                background: #e0e7ff;
+                border-color: #5a67d8;
             }}
             .priority-slot .slot-num {{
-                font-size: 1.5rem;
+                font-size: 1.2rem;
                 font-weight: bold;
                 color: #5a67d8;
+                margin-bottom: 5px;
             }}
-            .priority-slot .slot-text {{
+            .priority-slot .slot-content {{
                 color: #999;
                 font-size: 0.9em;
+                text-align: center;
             }}
-            .priority-slot.filled .slot-text {{
+            .priority-slot.filled .slot-content {{
                 color: #333;
                 font-weight: 600;
             }}
-            .heuristics-container {{
-                display: grid;
-                grid-template-columns: 1fr;
-                gap: 20px;
+            .priority-slot .heuristic-id {{
+                color: #48bb78;
             }}
-            @media (min-width: 768px) {{
-                .heuristics-container {{
-                    grid-template-columns: 2fr 1fr;
-                }}
+            .clear-btn {{
+                position: absolute;
+                top: 5px;
+                right: 8px;
+                background: #e53e3e;
+                color: white;
+                border: none;
+                border-radius: 50%;
+                width: 20px;
+                height: 20px;
+                font-size: 12px;
+                cursor: pointer;
+                display: none;
+            }}
+            .priority-slot.filled:hover .clear-btn {{
+                display: block;
+            }}
+            .controls {{
+                text-align: center;
+                margin-top: 20px;
+            }}
+            .result-box {{
+                margin-top: 15px;
+                padding: 15px;
+                border-radius: 6px;
+                display: none;
             }}
         </style>
         
         <script>
             const heuristics = {heuristics_json};
-            let selected = [null, null];
+            let selected = [null, null]; // [slot1, slot2]
             
             // Ініціалізація списку
             const list = document.getElementById('heuristicList');
@@ -168,52 +200,89 @@ class handler(BaseHTTPRequestHandler):
                     <div class="heuristic-desc">${{h.desc}}</div>
                 `;
                 
-                // Клік для вибору
                 div.addEventListener('click', () => selectHeuristic(h.id));
-                
-                // Drag and drop
-                div.addEventListener('dragstart', (e) => {{
-                    e.dataTransfer.setData('text/plain', h.id);
-                    div.style.opacity = '0.5';
-                }});
-                div.addEventListener('dragend', () => {{
-                    div.style.opacity = '1';
-                }});
+                div.addEventListener('dragstart', onDragStart);
+                div.addEventListener('dragend', onDragEnd);
                 
                 list.appendChild(div);
             }});
             
-            // Drop zones
+            // Налаштування слотів
             document.querySelectorAll('.priority-slot').forEach(slot => {{
-                slot.addEventListener('dragover', (e) => e.preventDefault());
-                slot.addEventListener('drop', (e) => {{
-                    e.preventDefault();
-                    const id = e.dataTransfer.getData('text/plain');
-                    placeHeuristic(id, parseInt(slot.dataset.slot));
-                }});
-                slot.addEventListener('click', () => {{
-                    if (slot.classList.contains('filled')) {{
-                        clearSlot(parseInt(slot.dataset.slot));
-                    }}
-                }});
+                slot.addEventListener('dragover', onDragOver);
+                slot.addEventListener('dragleave', onDragLeave);
+                slot.addEventListener('drop', onDrop);
+                slot.addEventListener('dragstart', onSlotDragStart);
+                slot.addEventListener('dragend', onSlotDragEnd);
             }});
+            
+            function onDragStart(e) {{
+                e.dataTransfer.setData('source', 'list');
+                e.dataTransfer.setData('id', this.dataset.id);
+                this.classList.add('dragging');
+            }}
+            
+            function onDragEnd() {{
+                this.classList.remove('dragging');
+                document.querySelectorAll('.priority-slot').forEach(s => s.classList.remove('drag-over'));
+            }}
+            
+            function onSlotDragStart(e) {{
+                if (!this.classList.contains('filled')) return;
+                e.dataTransfer.setData('source', 'slot');
+                e.dataTransfer.setData('fromSlot', this.dataset.slot);
+                this.classList.add('dragging');
+            }}
+            
+            function onSlotDragEnd() {{
+                this.classList.remove('dragging');
+                document.querySelectorAll('.priority-slot').forEach(s => s.classList.remove('drag-over'));
+            }}
+            
+            function onDragOver(e) {{
+                e.preventDefault();
+                this.classList.add('drag-over');
+            }}
+            
+            function onDragLeave() {{
+                this.classList.remove('drag-over');
+            }}
+            
+            function onDrop(e) {{
+                e.preventDefault();
+                this.classList.remove('drag-over');
+                
+                const source = e.dataTransfer.getData('source');
+                const toSlot = parseInt(this.dataset.slot);
+                
+                if (source === 'list') {{
+                    // Зі списку в слот
+                    const id = e.dataTransfer.getData('id');
+                    placeFromList(id, toSlot);
+                }} else if (source === 'slot') {{
+                    // Між слотами
+                    const fromSlot = parseInt(e.dataTransfer.getData('fromSlot'));
+                    swapSlots(fromSlot, toSlot);
+                }}
+            }}
             
             function selectHeuristic(id) {{
                 if (selected.includes(id)) return;
                 
-                if (!selected[0]) placeHeuristic(id, 1);
-                else if (!selected[1]) placeHeuristic(id, 2);
-                else placeHeuristic(id, 2); // Замінити другий
+                if (!selected[0]) placeFromList(id, 1);
+                else if (!selected[1]) placeFromList(id, 2);
+                else placeFromList(id, 2); // Замінити другий
             }}
             
-            function placeHeuristic(id, slotNum) {{
-                // Звільнити з іншого слота якщо там є
-                const otherIdx = slotNum === 1 ? 1 : 0;
-                if (selected[otherIdx] === id) {{
-                    selected[otherIdx] = null;
-                }}
-                
+            function placeFromList(id, slotNum) {{
                 selected[slotNum - 1] = id;
+                updateDisplay();
+            }}
+            
+            function swapSlots(from, to) {{
+                const temp = selected[from - 1];
+                selected[from - 1] = selected[to - 1];
+                selected[to - 1] = temp;
                 updateDisplay();
             }}
             
@@ -226,24 +295,39 @@ class handler(BaseHTTPRequestHandler):
                 // Оновити слоти
                 selected.forEach((id, idx) => {{
                     const slot = document.getElementById(`slot${{idx + 1}}`);
-                    const num = slot.querySelector('.slot-num');
-                    const text = slot.querySelector('.slot-text');
+                    const content = slot.querySelector('.slot-content');
                     
                     if (id) {{
                         const h = heuristics.find(x => x.id === id);
                         slot.className = 'priority-slot filled';
-                        text.innerHTML = `<span class="heuristic-id">${{h.id}}</span> ${{h.name}}`;
+                        slot.draggable = true;
+                        content.innerHTML = `<span class="heuristic-id">${{h.id}}</span> ${{h.name}}`;
+                        
+                        // Кнопка очищення
+                        let clearBtn = slot.querySelector('.clear-btn');
+                        if (!clearBtn) {{
+                            clearBtn = document.createElement('button');
+                            clearBtn.className = 'clear-btn';
+                            clearBtn.textContent = '×';
+                            clearBtn.onclick = (e) => {{
+                                e.stopPropagation();
+                                clearSlot(idx + 1);
+                            }};
+                            slot.appendChild(clearBtn);
+                        }}
                     }} else {{
                         slot.className = 'priority-slot';
-                        text.textContent = 'Клікніть або перетягніть';
+                        slot.draggable = false;
+                        content.textContent = 'Клікніть або перетягніть';
+                        
+                        const clearBtn = slot.querySelector('.clear-btn');
+                        if (clearBtn) clearBtn.remove();
                     }}
                 }});
                 
-                // Оновити виділення в списку
+                // Оновити список
                 document.querySelectorAll('.heuristic-item').forEach(item => {{
-                    const id = item.dataset.id;
-                    item.classList.toggle('selected', selected.includes(id));
-                    item.classList.toggle('in-priority', selected.includes(id));
+                    item.classList.toggle('in-priority', selected.includes(item.dataset.id));
                 }});
                 
                 // Кнопка
@@ -267,20 +351,19 @@ class handler(BaseHTTPRequestHandler):
                     const resDiv = document.getElementById('result');
                     
                     if (result.success) {{
-                        resDiv.innerHTML = '✅ Вибір збережено!<br><strong>' + selected[0] + '</strong> + <strong>' + selected[1] + '</strong>';
-                        resDiv.style.display = 'block';
-                        resDiv.style.background = '#c6f6d5';
-                        resDiv.style.color = '#22543d';
-                    }} else {{
-                        resDiv.textContent = '❌ ' + result.error;
-                        resDiv.style.display = 'block';
-                        resDiv.style.background = '#fed7d7';
-                        resDiv.style.color = '#c53030';
-                        btn.disabled = false;
+                        resDiv.innerHTML = `✅ Вибір #${{result.vote_num}} збережено!<br><strong>${{selected[0]}}</strong> → <strong>${{selected[1]}}</strong>`;
+                        resDiv.style.cssText = 'display:block;background:#c6f6d5;color:#22543d;';
+                        
+                        // Очистити після успіху
+                        selected = [null, null];
+                        updateDisplay();
                         btn.textContent = 'Відправити вибір';
+                    }} else {{
+                        throw new Error(result.error);
                     }}
                 }} catch (e) {{
-                    alert('Помилка: ' + e.message);
+                    resDiv.textContent = '❌ ' + e.message;
+                    resDiv.style.cssText = 'display:block;background:#fed7d7;color:#c53030;';
                     btn.disabled = false;
                     btn.textContent = 'Відправити вибір';
                 }}
