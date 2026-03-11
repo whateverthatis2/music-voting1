@@ -22,6 +22,18 @@
     {
       "src": "/protocol",
       "dest": "/api/protocol.py"
+    },
+    {
+      "src": "/heuristics",
+      "dest": "/api/heuristics.py"
+    },
+    {
+      "src": "/vote-heuristic",
+      "dest": "/api/vote_heuristic.py"
+    },
+    {
+      "src": "/heuristic-results",
+      "dest": "/api/heuristic_results.py"
     }
   ]
 }
