@@ -1,9 +1,7 @@
 from http.server import BaseHTTPRequestHandler
 import json
 from datetime import datetime
-from .utils import HEURISTICS
-
-heuristic_votes = []
+from .utils import HEURISTICS, get_db
 
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
@@ -22,16 +20,25 @@ class handler(BaseHTTPRequestHandler):
             self._send_json({"error": "Оберіть різні евристики"})
             return
         
-        # Збереження (без ID, просто порядковий номер)
-        vote_num = len(heuristic_votes) + 1
-        heuristic_votes.append({
-            "num": vote_num,
-            "h1": h1,
-            "h2": h2,
-            "time": datetime.now().isoformat()
-        })
-        
-        self._send_json({"success": True, "vote_num": vote_num})
+        # Збереження в MongoDB
+        try:
+            db = get_db()
+            collection = db.heuristic_votes
+            
+            # Номер голосу
+            count = collection.count_documents({})
+            vote_num = count + 1
+            
+            collection.insert_one({
+                "num": vote_num,
+                "h1": h1,
+                "h2": h2,
+                "time": datetime.now().isoformat()
+            })
+            
+            self._send_json({"success": True, "vote_num": vote_num})
+        except Exception as e:
+            self._send_json({"error": f"Помилка БД: {str(e)}"})
     
     def _send_json(self, data):
         self.send_response(200)
