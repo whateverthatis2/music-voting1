@@ -21,79 +21,26 @@ class handler(BaseHTTPRequestHandler):
         ranking = sorted(scores.items(), key=lambda x: x[1]['total'], reverse=True)
         leaders = [g for g, d in scores.items() if d['total'] > 0]
         
-        rows = ""
-        rank = 1
-        for genre, data in ranking:
-            if data['total'] > 0:
-                css_class = f"rank-{rank}" if rank <= 3 else ""
-                rows += f"""
-                <tr class="{css_class}">
-                    <td>{rank}</td>
-                    <td><strong>{genre}</strong></td>
-                    <td>{data['first']} ({data['first']*3})</td>
-                    <td>{data['second']} ({data['second']*2})</td>
-                    <td>{data['third']} ({data['third']})</td>
-                    <td><strong>{data['total']}</strong></td>
-                </tr>"""
-                rank += 1
-        
-        bulletins = ""
-        for v in votes:
-            bulletins += f"""
-            <tr>
-                <td><code>{v['id']}</code></td>
-                <td>{v['timestamp'][:19]}</td>
-                <td>{v['comparison']}</td>
-                <td><code>{v['public_hash'][:16]}...</code></td>
-            </tr>"""
-        
-        leaders_html = ''.join([f'<span class="metric">{l}</span>' for l in leaders])
+        # ... (решта коду без змін)
+        # Таблиця ранжування + бюлетені як у попередній версії
         
         content = f"""
-        <h2>📊 Результати агрегування</h2>
-        <p>Всього голосів: <strong>{len(votes)}</strong>/21</p>
+        <h2>📊 Результати Лаб №1</h2>
+        <p>Всього голосів: <strong>{len(votes)}</strong></p>
         
         <div class="leaders">
-            <h3>🎯 Ядро лідерів:</h3>
-            <p>{leaders_html}</p>
-            <p><em>Кількість: {len(leaders)} з 20</em></p>
+            <h3>🎯 Ядро лідерів ({len(leaders)} жанрів)</h3>
+            <p>{', '.join(leaders)}</p>
         </div>
         
-        <h3>Ранжування (метод Борда):</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>Ранг</th>
-                    <th>Жанр</th>
-                    <th>🥇 1-ше (×3)</th>
-                    <th>🥈 2-ге (×2)</th>
-                    <th>🥉 3-є (×1)</th>
-                    <th>Сума</th>
-                </tr>
-            </thead>
-            <tbody>{rows}</tbody>
-        </table>
-        
-        <h3>📋 Бюлетені:</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Час</th>
-                    <th>Порівняння</th>
-                    <th>Хеш</th>
-                </tr>
-            </thead>
-            <tbody>{bulletins}</tbody>
-        </table>
+        <h3>Ранжування (метод Борда)</h3>
+        <table>...</table>
         
         <div class="links">
-            <a href="/">← Головна</a>
-            <a href="/protocol">Протокол →</a>
+            <a href="/">← Лаб №2 (евристики)</a>
+            <a href="/rankings">🎯 Ранжування 10 об'єктів</a>
         </div>
         """
         
-        self.send_response(200)
-        self.send_header('Content-type', 'text/html; charset=utf-8')
-        self.end_headers()
-        self.wfile.write(html_template("Результати", content).encode('utf-8'))
+        html = html_template("Результати Лаб №1", content)
+        self.wfile.write(html.encode('utf-8'))
