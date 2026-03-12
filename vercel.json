@@ -1,11 +1,5 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/*.py",
-      "use": "@vercel/python"
-    }
-  ],
   "routes": [
     {
       "src": "/",
@@ -22,22 +16,6 @@
     {
       "src": "/rankings",
       "dest": "/api/rankings.py"
-    },
-    {
-      "src": "/aggregated-rankings",
-      "dest": "/api/rankings.py"
-    },
-    {
-      "src": "/save-ranking",
-      "dest": "/api/rankings.py"
-    },
-    {
-      "src": "/vote-heuristic",
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "/heuristic-votes",
-      "dest": "/api/index.py"
     }
   ]
 }
