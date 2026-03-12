@@ -1,6 +1,6 @@
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse
-from .utils import get_db, html_template, RANKING_OBJECTS
+from .utils import html, get_db, RANKING_OBJECTS
 import json, random
 from datetime import datetime
 
@@ -18,7 +18,7 @@ class handler(BaseHTTPRequestHandler):
     def _show_form(self):
         objects_json = json.dumps(RANKING_OBJECTS, ensure_ascii=False)
         content = f"""
-        <div class="info-box">Розташуйте 10 жанрів від 1 до 10. Перетягуйте для зміни.</div>
+        <div class="info">Розташуйте 10 жанрів від 1 до 10. Перетягуйте для зміни.</div>
         <div id="rankSlots" style="display:flex;flex-direction:column;gap:5px"></div>
         <div style="margin-top:20px">
             <button id="submitBtn" disabled>Зберегти</button>
@@ -56,7 +56,7 @@ class handler(BaseHTTPRequestHandler):
             try {{
                 const res = await fetch('/save-ranking', {{
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {{'Content-Type': 'application/json'}},
                     body: JSON.stringify({{ranking: ranking}})
                 }});
                 const data = await res.json();
@@ -70,7 +70,7 @@ class handler(BaseHTTPRequestHandler):
         }};
         </script>
         """
-        self._send_html(html_template("Ранжування 10 об'єктів", content))
+        self._send_html(html("Ранжування 10 об'єктів", content))
 
     def _save_ranking(self):
         try:
@@ -93,23 +93,22 @@ class handler(BaseHTTPRequestHandler):
         except: rankings = []
         
         if len(rankings) < 5:
-            self._send_html(html_template("ГА", f"<p class='error'>Треба мінімум 5 ранжувань (зараз {len(rankings)}). <a href='/rankings'>Додати</a></p>"))
+            self._send_html(html("ГА", f"<p class='error'>Треба мінімум 5 ранжувань (зараз {len(rankings)}). <a href='/rankings'>Додати</a></p>"))
             return
 
-        # Генетичний алгоритм (спрощений)
-        best = self._ga(rankings)
+        ga_result = self._ga(rankings)
         borda = self._borda(rankings)
         
-        comp_rows = "".join([f"<tr><td>{i+1}</td><td>{g}</td><td>{b}</td><td>{'✅' if g==b else '❌'}</td></tr>" for i,(g,b) in enumerate(zip(best, borda))])
+        comp_rows = "".join([f"<tr><td>{i+1}</td><td>{g}</td><td>{b}</td><td>{'✅' if g==b else '❌'}</td></tr>" for i,(g,b) in enumerate(zip(ga_result, borda))])
         
         content = f"""
         <h3>Результат ГА (найкращий з 50 поколінь)</h3>
-        <ol>{"".join([f"<li>{g}</li>" for g in best])}</ol>
+        <ol>{"".join([f"<li>{g}</li>" for g in ga_result])}</ol>
         <h3>Порівняння з методом Борда</h3>
         <table><thead><tr><th>Ранг</th><th>ГА</th><th>Борда</th><th>Збіг</th></tr></thead><tbody>{comp_rows}</tbody></table>
         <p><a href="/rankings">← Додати ще</a> | <a href="/">На головну</a></p>
         """
-        self._send_html(html_template("Агрегування (ГА)", content))
+        self._send_html(html("Агрегування (ГА)", content))
 
     def _ga(self, rankings, gens=50):
         def fitness(ind):
@@ -145,14 +144,9 @@ class handler(BaseHTTPRequestHandler):
                 scores[o] += (10 - i)
         return [o for o, _ in sorted(scores.items(), key=lambda x: x[1], reverse=True)]
 
-    def _send_html(self, html):
-        self.send_response(200)
-        self.send_header('Content-type', 'text/html; charset=utf-8')
-        self.end_headers()
-        self.wfile.write(html.encode('utf-8'))
-
-    def _send_json(self, data):
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json')
-        self.end_headers()
-        self.wfile.write(json.dumps(data).encode('utf-8'))
+    def _send_html(self, html_str):
+        self.send_response(200); self.send_header('Content-type','text/html; charset=utf-8'); self.end_headers()
+        self.wfile.write(html_str.encode('utf-8'))
+    def _send_json(self, d):
+        self.send_response(200); self.send_header('Content-type','application/json'); self.end_headers()
+        self.wfile.write(json.dumps(d).encode('utf-8'))
