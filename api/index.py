@@ -57,7 +57,7 @@ def index_handler(self):
         const slot = document.createElement('div');
         slot.className = 'rank-slot';
         slot.dataset.rank = i + 1;
-        slot.innerHTML = '<span class="rank-num">' + (i+1) + '.</span><span class="slot-placeholder">Перетягніть об\'єкт</span>';
+        slot.innerHTML = '<span class="rank-num">' + (i+1) + '.</span><span class="slot-placeholder">Перетягніть</span>';
         slot.addEventListener('dragover', function(e) {
             e.preventDefault();
             this.classList.add('drag-over');
@@ -108,7 +108,7 @@ def index_handler(self):
                 slot.innerHTML = '<span class="rank-num">' + (i+1) + '.</span><span class="obj-name">' + objects[idx] + '</span>';
             } else {
                 slot.classList.remove('filled');
-                slot.innerHTML = '<span class="rank-num">' + (i+1) + '.</span><span class="slot-placeholder">Перетягніть об\'єкт</span>';
+                slot.innerHTML = '<span class="rank-num">' + (i+1) + '.</span><span class="slot-placeholder">Перетягніть</span>';
             }
         });
         document.getElementById('submitBtn').disabled = ranking.length !== objects.length;
@@ -124,12 +124,12 @@ def index_handler(self):
             const result = await response.json();
             const resDiv = document.getElementById('result');
             if (result.success) {
-                resDiv.innerHTML = '✅ Збережено!';
+                resDiv.innerHTML = 'Збережено!';
                 resDiv.style.cssText = 'display:block;background:#c6f6d5;color:#22543d;';
                 ranking = [];
                 updateDisplay();
             } else {
-                resDiv.innerHTML = '❌ ' + result.error;
+                resDiv.innerHTML = 'Помилка: ' + result.error;
                 resDiv.style.cssText = 'display:block;background:#fed7d7;color:#c53030;';
             }
         } catch (e) {
