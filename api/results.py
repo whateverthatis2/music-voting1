@@ -1,9 +1,9 @@
 from http.server import BaseHTTPRequestHandler
-from .utils import load_db, GENRES, html_template
+from .utils import html, load_votes, GENRES
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        db = load_db()
+        db = load_votes()
         votes = db.get('votes', [])
         
         scores = {g: {"first":0, "second":0, "third":0, "total":0} for g in GENRES}
@@ -23,15 +23,13 @@ class handler(BaseHTTPRequestHandler):
         
         content = f"""
         <p>Всього голосів: <b>{len(votes)}</b></p>
-        <div class="info-box">Ядро лідерів ({len(leaders)}): {', '.join(leaders)}</div>
+        <div class="info">Ядро лідерів ({len(leaders)}): {', '.join(leaders)}</div>
         <table><thead><tr><th>Ранг</th><th>Жанр</th><th>1-ше</th><th>2-ге</th><th>3-є</th><th>Сума</th></tr></thead><tbody>{rows}</tbody></table>
         <div style="margin-top:20px">
-            <a href="/">← Лаб 2 (Евристики)</a> | 
-            <a href="/protocol">Протокол Лаб 1</a> | 
-            <a href="/rankings">Ранжування 10 об'єктів</a>
+            <a href="/">← Лаб 2 (Евристики)</a> | <a href="/protocol">Протокол Лаб 1</a> | <a href="/rankings">Ранжування 10 + ГА</a>
         </div>
         """
         self.send_response(200)
         self.send_header('Content-type', 'text/html; charset=utf-8')
         self.end_headers()
-        self.wfile.write(html_template("Результати Лаб 1", content).encode('utf-8'))
+        self.wfile.write(html("Результати Лаб 1", content).encode('utf-8'))
