@@ -12,10 +12,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "/vote",
-      "dest": "/api/vote.py"
-    },
-    {
       "src": "/results",
       "dest": "/api/results.py"
     },
@@ -24,28 +20,24 @@
       "dest": "/api/protocol.py"
     },
     {
-      "src": "/vote-heuristic",
-      "dest": "/api/vote_heuristic.py"
-    },
-    {
-      "src": "/heuristic-votes",
-      "dest": "/api/heuristic_votes.py"
-    },
-    {
       "src": "/rankings",
       "dest": "/api/rankings.py"
     },
     {
-      "src": "/save-ranking",
-      "dest": "/api/save_ranking.py"
-    },
-    {
-      "src": "/ranking-count",
-      "dest": "/api/ranking_count.py"
-    },
-    {
       "src": "/aggregated-rankings",
-      "dest": "/api/aggregated_rankings.py"
+      "dest": "/api/rankings.py"
+    },
+    {
+      "src": "/save-ranking",
+      "dest": "/api/rankings.py"
+    },
+    {
+      "src": "/vote-heuristic",
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/heuristic-votes",
+      "dest": "/api/index.py"
     }
   ]
 }
