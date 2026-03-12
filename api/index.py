@@ -6,6 +6,7 @@ import json, random, time
 # ==================== ГОЛОВНА СТОРІНКА ====================
 
 def index_handler(self):
+    objects_json = json.dumps(OBJECTS, ensure_ascii=False)
     content = '''<div class="info-box"><strong>📊 Експертне ранжування:</strong> Розставте 10 об'єктів за пріоритетом (1 - найважливіший).</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
     <div><h3>📦 Об'єкти</h3><div id="objectsList" style="min-height:300px;border:2px dashed #e2e8f0;border-radius:8px;padding:10px"></div></div>
@@ -22,10 +23,14 @@ def index_handler(self):
     .rank-num{font-weight:bold;color:#5a67d8;min-width:24px}.slot-placeholder{color:#999}
     </style>
     <script>
-    const objects = [''' + ','.join("'"+o+"'" for o in OBJECTS) + '''];
+    const objects = ''' + objects_json + ''';
     let ranking = [];
     const list = document.getElementById('objectsList');
     const slots = document.getElementById('rankingSlots');
+    
+    console.log('Objects:', objects);
+    console.log('List:', list);
+    console.log('Slots:', slots);
     
     // Створення списку об'єктів
     objects.forEach((o, i) => {
@@ -93,12 +98,9 @@ def index_handler(self):
     }
     
     function updateDisplay() {
-        // Оновити об'єкти
         document.querySelectorAll('.obj-item').forEach((el, i) => {
             el.classList.toggle('in-ranking', ranking.includes(i));
         });
-        
-        // Оновити слоти
         document.querySelectorAll('.rank-slot').forEach((slot, i) => {
             const idx = ranking[i];
             if (idx !== undefined) {
@@ -109,12 +111,9 @@ def index_handler(self):
                 slot.innerHTML = '<span class="rank-num">' + (i+1) + '.</span><span class="slot-placeholder">Перетягніть об\'єкт</span>';
             }
         });
-        
-        // Кнопка
         document.getElementById('submitBtn').disabled = ranking.length !== objects.length;
     }
     
-    // Збереження
     document.getElementById('submitBtn').addEventListener('click', async function() {
         try {
             const response = await fetch('/submit', {
@@ -125,7 +124,7 @@ def index_handler(self):
             const result = await response.json();
             const resDiv = document.getElementById('result');
             if (result.success) {
-                resDiv.innerHTML = '✅ Збережено! Кількість ранжувань: ' + (ranking.length);
+                resDiv.innerHTML = '✅ Збережено!';
                 resDiv.style.cssText = 'display:block;background:#c6f6d5;color:#22543d;';
                 ranking = [];
                 updateDisplay();
