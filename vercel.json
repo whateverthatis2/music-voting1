@@ -30,6 +30,10 @@
     {
       "src": "/heuristic-votes",
       "dest": "/api/heuristic_votes.py"
+    },
+    {
+      "src": "/heuristic-results",
+      "dest": "/api/heuristic_results.py"
     }
   ]
 }
