@@ -1,371 +1,274 @@
 from http.server import BaseHTTPRequestHandler
-from .utils import html_template, HEURISTICS
-import json
+from .utils import OBJECTS, EXPERTS, PROTOCOL_PASSWORD, load_rankings, save_ranking, get_db, html_template
+from urllib.parse import parse_qs
+import json, random
+
+# ==================== ГОЛОВНА СТОРІНКА ====================
+
+def index_handler(self):
+    content = '''<div class="info-box"><strong>📊 Експертне ранжування:</strong> Розставте 10 об'єктів за пріоритетом (1 - найважливіший).</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+    <div><h3>📦 Об'єкти</h3><div id="objectsList" style="min-height:300px;border:2px dashed #e2e8f0;border-radius:8px;padding:10px"></div></div>
+    <div><h3>🎯 Порядок пріоритетів</h3><div id="rankingSlots" style="min-height:300px"></div></div></div>
+    <div style="text-align:center;margin-top:20px"><select id="expertId" style="padding:10px;font-size:16px"><option value="">-- Ваш ID --</option>'''
+    for exp in EXPERTS:
+        content += f'<option value="{exp}">{exp}</option>'
+    content += '''</select><br><button id="submitBtn" disabled style="padding:12px 30px;font-size:16px;background:#5a67d8;color:white;border:none;border-radius:6px;cursor:pointer;margin-top:15px">Зберегти ранжування</button>
+    <div id="result" style="margin-top:15px;padding:15px;border-radius:6px;display:none"></div></div>
+    <div class="links"><a href="/results">📊 Результати</a><a href="/protocol">🔐 Протокол</a></div>
+    <style>
+    .obj-item{background:#f7fafc;padding:12px;margin:8px 0;border-radius:6px;border:2px solid #e2e8f0;cursor:grab;display:flex;justify-content:space-between;align-items:center}
+    .obj-item:hover{border-color:#5a67d8}.obj-item.dragging{opacity:.5}.obj-item.in-ranking{display:none}
+    .obj-name{font-weight:600}.obj-rank{background:#5a67d8;color:white;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:.85em}
+    .rank-slot{background:white;border:2px dashed #cbd5e0;border-radius:6px;padding:12px;margin:8px 0;display:flex;align-items:center;gap:10px;min-height:44px}
+    .rank-slot.filled{border-style:solid;border-color:#48bb78;background:#f0fff4}.rank-slot.drag-over{background:#e0e7ff;border-color:#5a67d8}
+    .rank-num{font-weight:bold;color:#5a67d8;min-width:24px}.slot-placeholder{color:#999}
+    </style>
+    <script>
+    const objects=''' + json.dumps(OBJECTS) + ''';let ranking=[];
+    const list=document.getElementById('objectsList');const slots=document.getElementById('rankingSlots');
+    objects.forEach((o,i)=>{const div=document.createElement('div');div.className='obj-item';div.draggable=true;div.dataset.idx=i;div.innerHTML='<span class="obj-name">'+o+'</span><span class="obj-rank">'+(i+1)+'</span>';
+    div.addEventListener('dragstart',e=>{e.dataTransfer.setData('idx',i);this.classList.add('dragging');});
+    div.addEventListener('dragend',function(){this.classList.remove('dragging');});
+    div.addEventListener('click',()=>addToRanking(i));list.appendChild(div);});
+    for(let i=0;i<objects.length;i++){const slot=document.createElement('div');slot.className='rank-slot';slot.dataset.rank=i+1;slot.innerHTML='<span class="rank-num">'+(i+1)+'. </span><span class="slot-placeholder">Перетягніть об\'єкт</span>';
+    slot.addEventListener('dragover',e=>{e.preventDefault();this.classList.add('drag-over');});
+    slot.addEventListener('dragleave',function(){this.classList.remove('drag-over');});
+    slot.addEventListener('drop',function(e){e.preventDefault();this.classList.remove('drag-over');const idx=parseInt(e.dataTransfer.getData('idx'));moveToRanking(idx,this.dataset.rank);});
+    slot.addEventListener('click',function(){if(this.classList.contains('filled')){removeFromRanking(parseInt(this.dataset.rank));}});slots.appendChild(slot);}
+    function addToRanking(idx){if(ranking.includes(idx))return;ranking.push(idx);updateDisplay();}
+    function moveToRanking(idx,rank){const pos=ranking.indexOf(idx);if(pos>=0)ranking.splice(pos,1);ranking.splice(rank-1,0,idx);updateDisplay();}
+    function removeFromRanking(rank){ranking.splice(rank-1,1);updateDisplay();}
+    function updateDisplay(){document.querySelectorAll('.obj-item').forEach((el,i)=>{el.classList.toggle('in-ranking',ranking.includes(i));});
+    document.querySelectorAll('.rank-slot').forEach((slot,i)=>{const idx=ranking[i];if(idx!==undefined){const o=objects[idx];slot.classList.add('filled');slot.innerHTML='<span class="rank-num">'+(i+1)+'. </span><span class="obj-name">'+o+'</span>';}
+    else{slot.classList.remove('filled');slot.innerHTML='<span class="rank-num">'+(i+1)+'. </span><span class="slot-placeholder">Перетягніть об\'єкт</span>';}});
+    document.getElementById('submitBtn').disabled=ranking.length!==objects.length;}
+    document.getElementById('submitBtn').addEventListener('click',async()=>{const expertId=document.getElementById('expertId').value;if(!expertId){alert('Оберіть ваш ID');return;}
+    try{const response=await fetch('/submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({expert:expertId,ranking:ranking.map(i=>objects[i])})});
+    const result=await response.json();const resDiv=document.getElementById('result');if(result.success){resDiv.innerHTML='✅ Збережено!';resDiv.style.cssText='display:block;background:#c6f6d5;color:#22543d;';ranking=[];updateDisplay();}
+    else{resDiv.innerHTML='❌ '+result.error;resDiv.style.cssText='display:block;background:#fed7d7;color:#c53030;';}}catch(e){alert('Помилка: '+e.message);}});
+    </script>'''
+    self.send_response(200)
+    self.send_header('Content-type', 'text/html; charset=utf-8')
+    self.end_headers()
+    self.wfile.write(html_template("Ранжування", content).encode('utf-8'))
+
+# ==================== ЗБЕРЕЖЕННЯ РАНЖУВАННЯ ====================
+
+def submit_handler(self, body):
+    data = json.loads(body) if body else {}
+    expert, ranking = data.get('expert'), data.get('ranking')
+    if not expert or expert not in EXPERTS:
+        return send_json(self, {"error": "Невірний експерт"})
+    if not ranking or len(ranking) != len(OBJECTS):
+        return send_json(self, {"error": "Неповне ранжування"})
+    if save_ranking(expert, ranking):
+        send_json(self, {"success": True})
+    else:
+        send_json(self, {"error": "Помилка БД"})
+
+# ==================== МЕТАЕВРИСТИКИ ====================
+
+def fitness(ranking, expert_rankings):
+    """Фітнес-функція: сума відстаней Кеміні до всіх експертів"""
+    total = 0
+    for exp in expert_rankings:
+        exp_rank = exp.get('ranking', [])
+        for i, obj in enumerate(ranking):
+            if obj in exp_rank:
+                total += abs(i - exp_rank.index(obj))
+    return -total  # Мінімізуємо відстань
+
+def mutate(ranking):
+    """Мутація: поміняти два об'єкти місцями"""
+    r = ranking.copy()
+    i, j = random.sample(range(len(r)), 2)
+    r[i], r[j] = r[j], r[i]
+    return r
+
+def crossover(p1, p2):
+    """Кросовер: Order Crossover (OX)"""
+    n = len(p1)
+    a, b = sorted(random.sample(range(n), 2))
+    child = [None] * n
+    child[a:b+1] = p1[a:b+1]
+    pos = b + 1
+    for obj in p2[b+1:] + p2[:b+1]:
+        if obj not in child:
+            if pos >= n: pos = 0
+            while child[pos] is not None: pos = (pos + 1) % n
+            child[pos] = obj
+    return child
+
+def genetic_algorithm(expert_rankings, generations=100, pop_size=50):
+    """Генетичний алгоритм для пошуку компромісного ранжування"""
+    population = [OBJECTS.copy() for _ in range(pop_size)]
+    for _ in range(pop_size // 2):
+        population.append(random.sample(OBJECTS, len(OBJECTS)))
+    
+    for gen in range(generations):
+        population.sort(key=lambda x: fitness(x, expert_rankings), reverse=True)
+        new_pop = population[:pop_size//2]  # Еліта
+        while len(new_pop) < pop_size:
+            p1, p2 = random.sample(population[:20], 2)
+            child = crossover(p1, p1) if random.random() < 0.3 else crossover(p1, p2)
+            if random.random() < 0.5:
+                child = mutate(child)
+            new_pop.append(child)
+        population = new_pop
+    return population[0]
+
+def ant_colony(expert_rankings, iterations=50, ants=30):
+    """Мурашиний алгоритм"""
+    n = len(OBJECTS)
+    pheromone = [[1.0]*n for _ in range(n)]
+    best_ranking, best_fit = None, float('-inf')
+    
+    for _ in range(iterations):
+        solutions = []
+        for _ in range(ants):
+            solution = []
+            available = OBJECTS.copy()
+            while available:
+                if not solution:
+                    obj = random.choice(available)
+                else:
+                    last_idx = OBJECTS.index(solution[-1])
+                    probs = [pheromone[last_idx][OBJECTS.index(o)] for o in available]
+                    total = sum(probs)
+                    r = random.random() * total
+                    cumsum = 0
+                    obj = available[0]
+                    for i, o in enumerate(available):
+                        cumsum += probs[i]
+                        if cumsum >= r:
+                            obj = o
+                            break
+                solution.append(obj)
+                available.remove(obj)
+            solutions.append(solution)
+            f = fitness(solution, expert_rankings)
+            if f > best_fit:
+                best_fit, best_ranking = f, solution
+        
+        # Оновлення феромонів
+        for sol in solutions:
+            for i in range(n-1):
+                idx1, idx2 = OBJECTS.index(sol[i]), OBJECTS.index(sol[i+1])
+                pheromone[idx1][idx2] += 0.1
+        for row in pheromone:
+            for i in range(len(row)):
+                row[i] *= 0.95
+    return best_ranking if best_ranking else OBJECTS.copy()
+
+def simulated_annealing(expert_rankings, iterations=1000, temp=100, cooling=0.995):
+    """Імітація відпалу"""
+    current = random.sample(OBJECTS, len(OBJECTS))
+    best, best_fit = current.copy(), fitness(current, expert_rankings)
+    
+    for i in range(iterations):
+        neighbor = mutate(current)
+        delta = fitness(neighbor, expert_rankings) - fitness(current, expert_rankings)
+        if delta > 0 or random.random() < pow(2.718, delta/temp):
+            current = neighbor
+            if fitness(current, expert_rankings) > best_fit:
+                best, best_fit = current.copy(), fitness(current, expert_rankings)
+        temp *= cooling
+    return best
+
+def borda_count(expert_rankings):
+    """Метод Борда (базовий)"""
+    n = len(OBJECTS)
+    scores = {obj: 0 for obj in OBJECTS}
+    for exp in expert_rankings:
+        rank = exp.get('ranking', [])
+        for i, obj in enumerate(rank):
+            scores[obj] += (n - i)
+    return sorted(OBJECTS, key=lambda x: scores[x], reverse=True)
+
+# ==================== РЕЗУЛЬТАТИ ====================
+
+def results_handler(self):
+    rankings = load_rankings()
+    n = len(OBJECTS)
+    
+    # Різні методи агрегації
+    genetic = genetic_algorithm(rankings) if rankings else OBJECTS.copy()
+    ant = ant_colony(rankings) if rankings else OBJECTS.copy()
+    sa = simulated_annealing(rankings) if rankings else OBJECTS.copy()
+    borda = borda_count(rankings) if rankings else OBJECTS.copy()
+    
+    # Фітнес для порівняння
+    gen_fit = fitness(genetic, rankings) if rankings else 0
+    ant_fit = fitness(ant, rankings) if rankings else 0
+    sa_fit = fitness(sa, rankings) if rankings else 0
+    borda_fit = fitness(borda, rankings) if rankings else 0
+    
+    content = f'''<h2>📊 Результати ранжування</h2><p>Експертів: <b>{len(rankings)}</b>/{len(EXPERTS)}</p>
+    <h3>🏆 Компромісні ранжування (різними методами)</h3>
+    <table><thead><tr><th>Метод</th><th>Ранжування</th><th>Фітнес (Кеміні)</th></tr></thead><tbody>
+    <tr><td>🧬 Генетичний</td><td>{' → '.join(genetic)}</td><td>{-gen_fit}</td></tr>
+    <tr><td>🐜 Мурашиний</td><td>{' → '.join(ant)}</td><td>{-ant_fit}</td></tr>
+    <tr><td>🔥 Відпал</td><td>{' → '.join(sa)}</td><td>{-sa_fit}</td></tr>
+    <tr><td>📊 Борда</td><td>{' → '.join(borda)}</td><td>{-borda_fit}</td></tr>
+    </tbody></table>
+    <h3>📋 Ранжування експертів</h3><table><thead><tr><th>Експерт</th><th>Час</th><th>Порядок</th></tr></thead><tbody>'''
+    for r in rankings:
+        content += f'<tr><td><b>{r.get("expert","")}</b></td><td>{r.get("time","")[:19]}</td><td>{" → ".join(r.get("ranking",[]))}</td></tr>'
+    content += '''</tbody></table><div class="links"><a href="/">← Ранжувати</a><a href="/protocol">🔐 Протокол</a></div>'''
+    self.send_response(200)
+    self.send_header('Content-type', 'text/html; charset=utf-8')
+    self.end_headers()
+    self.wfile.write(html_template("Результати", content).encode('utf-8'))
+
+# ==================== ПРОТОКОЛ ====================
+
+def protocol_handler(self, method='GET', body=''):
+    if method == 'GET':
+        return protocol_form(self)
+    params = parse_qs(body)
+    if params.get('password', [''])[0] == PROTOCOL_PASSWORD:
+        return protocol_show(self)
+    return protocol_form(self, error="Неправильний пароль!")
+
+def protocol_show(self):
+    rankings = load_rankings()
+    entries = "".join('<div style="background:#2d3748;padding:15px;margin:10px 0;border-left:3px solid #48bb78;border-radius:4px"><div style="color:#a0aec0">['+r.get('time','N/A')[:19]+'] '+r.get('expert','N/A')+'</div><div style="color:#48bb78;margin-top:5px">Ранжування: '+' → '.join(r.get('ranking',[]))+'</div></div>' for r in rankings)
+    html = f'''<!DOCTYPE html><html lang="uk"><head><meta charset="UTF-8"><title>Протокол</title>
+    <style>body{{font-family:'Courier New',monospace;background:#1a202c;color:#48bb78;padding:40px;margin:0}}.container{{max-width:900px;margin:0 auto;background:#2d3748;padding:30px;border-radius:10px}}h1{{color:#fff;border-bottom:2px solid #48bb78;padding-bottom:10px}}a{{color:#63b3ed;text-decoration:none}}</style></head>
+    <body><div class="container"><h1>🔐 ПРОТОКОЛ<a href="/" style="float:right">[← Назад]</a></h1><p style="color:#a0aec0">Записів: {len(rankings)}</p>{entries}</div></body></html>'''
+    self.send_response(200)
+    self.send_header('Content-type', 'text/html; charset=utf-8')
+    self.end_headers()
+    self.wfile.write(html.encode('utf-8'))
+
+def protocol_form(self, error=""):
+    error_html = '<p style="color:#fc8181;font-weight:bold">'+error+'</p>' if error else ""
+    html = '<!DOCTYPE html><html lang="uk"><head><meta charset="UTF-8"><title>Доступ</title><style>body{font-family:sans-serif;background:#1a202c;min-height:100vh;display:flex;align-items:center;justify-content:center;margin:0}.box{background:#2d3748;padding:40px;border-radius:15px;max-width:400px;text-align:center}h2{color:#fff}input{width:100%;padding:14px;margin:15px 0;border:2px solid #4a5568;border-radius:8px;background:#1a202c;color:#fff;font-size:16px}button{width:100%;padding:14px;background:#5a67d8;color:white;border:none;border-radius:8px;font-size:16px;cursor:pointer;font-weight:600}</style></head><body><div class="box"><h2>🔐 Доступ до протоколу</h2><p style="color:#a0aec0;margin:20px 0">Введіть пароль</p>'+error_html+'<form method="POST" action="/protocol"><input type="password" name="password" placeholder="Пароль" required><button type="submit">Увійти</button></form></div></body></html>'
+    self.send_response(401 if error else 200)
+    self.send_header('Content-type', 'text/html; charset=utf-8')
+    self.end_headers()
+    self.wfile.write(html.encode('utf-8'))
+
+# ==================== ДОПОМІЖНІ ====================
+
+def send_json(self, data):
+    self.send_response(200)
+    self.send_header('Content-type', 'application/json')
+    self.end_headers()
+    self.wfile.write(json.dumps(data, ensure_ascii=False).encode('utf-8'))
+
+# ==================== ГОЛОВНИЙ HANDLER ====================
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        self.send_response(200)
-        self.send_header('Content-type', 'text/html; charset=utf-8')
-        self.end_headers()
-        
-        heuristics_json = json.dumps(HEURISTICS, ensure_ascii=False)
-        
-        content = f'''
-        <div class="info-box">
-            <strong>📋 1Лабораторна робота №2:</strong> Оберіть 2 евристики. 
-            Перетягніть зі списку або клікніть. Між собою евристики можна перетягувати для зміни пріоритету.
-            Для очищення слота — перетягніть евристику назад у список.
-        </div>
-        
-        <div class="heuristics-container">
-            <div class="heuristics-list" id="heuristicList">
-                <!-- Заповнюється JS -->
-            </div>
-            
-            <div class="priority-panel">
-                <div class="priority-title">🎯 Обрані евристики</div>
-                <div class="priority-slots">
-                    <div class="priority-slot" id="slot1" data-slot="1" draggable="false">
-                        <span class="slot-num">1</span>
-                        <span class="slot-content">Перетягніть сюди</span>
-                    </div>
-                    <div class="priority-slot" id="slot2" data-slot="2" draggable="false">
-                        <span class="slot-num">2</span>
-                        <span class="slot-content">Перетягніть сюди</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="controls">
-            <button id="submitBtn" disabled>Відправити вибір</button>
-            <div id="result" class="result-box"></div>
-        </div>
-        
-        <div class="links">
-            <a href="/results">📊 Результати Лаб №1</a>
-            <a href="/heuristic-votes">📋 Протокол евристик</a>
-        </div>
-        
-        <style>
-            .heuristics-container {{
-                display: grid;
-                grid-template-columns: 1fr;
-                gap: 20px;
-                margin-bottom: 20px;
-            }}
-            @media (min-width: 768px) {{
-                .heuristics-container {{
-                    grid-template-columns: 2fr 1fr;
-                }}
-            }}
-            .heuristics-list {{
-                display: flex;
-                flex-direction: column;
-                gap: 10px;
-                min-height: 200px;
-                padding: 10px;
-                border: 2px dashed transparent;
-                border-radius: 8px;
-                transition: all 0.2s;
-            }}
-            .heuristics-list.drag-over {{
-                border-color: #5a67d8;
-                background: #e0e7ff;
-            }}
-            .heuristic-item {{
-                background: #f7fafc;
-                padding: 15px;
-                border-radius: 8px;
-                border: 2px solid #e2e8f0;
-                cursor: grab;
-                transition: all 0.2s;
-            }}
-            .heuristic-item:hover {{
-                border-color: #5a67d8;
-            }}
-            .heuristic-item.dragging {{
-                opacity: 0.5;
-            }}
-            .heuristic-item.in-priority {{
-                display: none;
-            }}
-            .heuristic-id {{
-                font-weight: bold;
-                color: #5a67d8;
-                margin-right: 8px;
-            }}
-            .heuristic-name {{
-                font-weight: 600;
-            }}
-            .heuristic-desc {{
-                font-size: 0.85em;
-                color: #666;
-                margin-top: 5px;
-            }}
-            .priority-panel {{
-                background: #fffaf0;
-                padding: 20px;
-                border-radius: 8px;
-                border: 2px solid #ed8936;
-            }}
-            .priority-title {{
-                font-weight: bold;
-                margin-bottom: 15px;
-                color: #744210;
-            }}
-            .priority-slots {{
-                display: flex;
-                flex-direction: column;
-                gap: 10px;
-            }}
-            .priority-slot {{
-                background: white;
-                border: 2px dashed #cbd5e0;
-                border-radius: 6px;
-                padding: 15px;
-                min-height: 80px;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                transition: all 0.2s;
-            }}
-            .priority-slot.filled {{
-                border-style: solid;
-                border-color: #48bb78;
-                background: #f0fff4;
-                cursor: grab;
-            }}
-            .priority-slot.filled.dragging {{
-                opacity: 0.5;
-            }}
-            .priority-slot.drag-over {{
-                background: #e0e7ff;
-                border-color: #5a67d8;
-            }}
-            .priority-slot .slot-num {{
-                font-size: 1.2rem;
-                font-weight: bold;
-                color: #5a67d8;
-                margin-bottom: 5px;
-            }}
-            .priority-slot .slot-content {{
-                color: #999;
-                font-size: 0.9em;
-                text-align: center;
-            }}
-            .priority-slot.filled .slot-content {{
-                color: #333;
-                font-weight: 600;
-            }}
-            .priority-slot .heuristic-id {{
-                color: #48bb78;
-            }}
-            .controls {{
-                text-align: center;
-                margin-top: 20px;
-            }}
-            .result-box {{
-                margin-top: 15px;
-                padding: 15px;
-                border-radius: 6px;
-                display: none;
-            }}
-        </style>
-        
-        <script>
-            const heuristics = {heuristics_json};
-            let selected = [null, null];
-            
-            // Ініціалізація списку
-            const list = document.getElementById('heuristicList');
-            heuristics.forEach(h => {{
-                const div = document.createElement('div');
-                div.className = 'heuristic-item';
-                div.draggable = true;
-                div.dataset.id = h.id;
-                div.dataset.source = 'list';
-                div.innerHTML = `
-                    <span class="heuristic-id">${{h.id}}</span>
-                    <span class="heuristic-name">${{h.name}}</span>
-                    <div class="heuristic-desc">${{h.desc}}</div>
-                `;
-                
-                div.addEventListener('click', () => selectHeuristic(h.id));
-                div.addEventListener('dragstart', onListDragStart);
-                div.addEventListener('dragend', onDragEnd);
-                
-                list.appendChild(div);
-            }});
-            
-            // Налаштування списку як зони скидання
-            list.addEventListener('dragover', (e) => {{
-                e.preventDefault();
-                list.classList.add('drag-over');
-            }});
-            list.addEventListener('dragleave', () => {{
-                list.classList.remove('drag-over');
-            }});
-            list.addEventListener('drop', onListDrop);
-            
-            // Налаштування слотів
-            document.querySelectorAll('.priority-slot').forEach(slot => {{
-                slot.addEventListener('dragover', onSlotDragOver);
-                slot.addEventListener('dragleave', onSlotDragLeave);
-                slot.addEventListener('drop', onSlotDrop);
-                slot.addEventListener('dragstart', onSlotDragStart);
-                slot.addEventListener('dragend', onDragEnd);
-            }});
-            
-            function onListDragStart(e) {{
-                e.dataTransfer.setData('source', 'list');
-                e.dataTransfer.setData('id', this.dataset.id);
-                this.classList.add('dragging');
-            }}
-            
-            function onSlotDragStart(e) {{
-                if (!this.classList.contains('filled')) {{
-                    e.preventDefault();
-                    return;
-                }}
-                e.dataTransfer.setData('source', 'slot');
-                e.dataTransfer.setData('fromSlot', this.dataset.slot);
-                this.classList.add('dragging');
-            }}
-            
-            function onDragEnd() {{
-                this.classList.remove('dragging');
-                document.querySelectorAll('.priority-slot, .heuristics-list').forEach(el => {{
-                    el.classList.remove('drag-over');
-                }});
-            }}
-            
-            function onSlotDragOver(e) {{
-                e.preventDefault();
-                this.classList.add('drag-over');
-            }}
-            
-            function onSlotDragLeave() {{
-                this.classList.remove('drag-over');
-            }}
-            
-            function onSlotDrop(e) {{
-                e.preventDefault();
-                this.classList.remove('drag-over');
-                
-                const source = e.dataTransfer.getData('source');
-                const toSlot = parseInt(this.dataset.slot);
-                
-                if (source === 'list') {{
-                    const id = e.dataTransfer.getData('id');
-                    placeInSlot(id, toSlot);
-                }} else if (source === 'slot') {{
-                    const fromSlot = parseInt(e.dataTransfer.getData('fromSlot'));
-                    if (fromSlot !== toSlot) {{
-                        swapSlots(fromSlot, toSlot);
-                    }}
-                }}
-            }}
-            
-            function onListDrop(e) {{
-                e.preventDefault();
-                list.classList.remove('drag-over');
-                
-                const source = e.dataTransfer.getData('source');
-                if (source === 'slot') {{
-                    const fromSlot = parseInt(e.dataTransfer.getData('fromSlot'));
-                    clearSlot(fromSlot);
-                }}
-            }}
-            
-            function selectHeuristic(id) {{
-                if (selected.includes(id)) return;
-                
-                if (!selected[0]) placeInSlot(id, 1);
-                else if (!selected[1]) placeInSlot(id, 2);
-                else placeInSlot(id, 2);
-            }}
-            
-            function placeInSlot(id, slotNum) {{
-                selected[slotNum - 1] = id;
-                updateDisplay();
-            }}
-            
-            function swapSlots(from, to) {{
-                const temp = selected[from - 1];
-                selected[from - 1] = selected[to - 1];
-                selected[to - 1] = temp;
-                updateDisplay();
-            }}
-            
-            function clearSlot(slotNum) {{
-                selected[slotNum - 1] = null;
-                updateDisplay();
-            }}
-            
-            function updateDisplay() {{
-                // Оновити слоти
-                selected.forEach((id, idx) => {{
-                    const slot = document.getElementById(`slot${{idx + 1}}`);
-                    const content = slot.querySelector('.slot-content');
-                    
-                    if (id) {{
-                        const h = heuristics.find(x => x.id === id);
-                        slot.className = 'priority-slot filled';
-                        slot.draggable = true;
-                        content.innerHTML = `<span class="heuristic-id">${{h.id}}</span> ${{h.name}}`;
-                    }} else {{
-                        slot.className = 'priority-slot';
-                        slot.draggable = false;
-                        content.textContent = 'Перетягніть сюди';
-                    }}
-                }});
-                
-                // Оновити список
-                document.querySelectorAll('.heuristic-item').forEach(item => {{
-                    item.classList.toggle('in-priority', selected.includes(item.dataset.id));
-                }});
-                
-                // Кнопка
-                document.getElementById('submitBtn').disabled = !(selected[0] && selected[1]);
-            }}
-            
-            // Відправка
-            document.getElementById('submitBtn').addEventListener('click', async () => {{
-                const btn = document.getElementById('submitBtn');
-                btn.disabled = true;
-                btn.textContent = 'Відправка...';
-                
-                try {{
-                    const response = await fetch('/vote-heuristic', {{
-                        method: 'POST',
-                        headers: {{'Content-Type': 'application/json'}},
-                        body: JSON.stringify({{ h1: selected[0], h2: selected[1] }})
-                    }});
-                    
-                    const result = await response.json();
-                    const resDiv = document.getElementById('result');
-                    
-                    if (result.success) {{
-                        resDiv.innerHTML = `✅ Вибір #${{result.vote_num}} збережено!<br><strong>${{selected[0]}}</strong> → <strong>${{selected[1]}}</strong>`;
-                        resDiv.style.cssText = 'display:block;background:#c6f6d5;color:#22543d;';
-                        
-                        selected = [null, null];
-                        updateDisplay();
-                        btn.textContent = 'Відправити вибір';
-                    }} else {{
-                        throw new Error(result.error);
-                    }}
-                }} catch (e) {{
-                    resDiv.textContent = '❌ ' + e.message;
-                    resDiv.style.cssText = 'display:block;background:#fed7d7;color:#c53030;';
-                    btn.disabled = false;
-                    btn.textContent = 'Відправити вибір';
-                }}
-            }});
-        </script>
-        '''
-        
-        html = html_template("Лабораторна №2 — Вибір евристик", content)
-        self.wfile.write(html.encode('utf-8'))
+        if self.path == '/': index_handler(self)
+        elif self.path == '/results': results_handler(self)
+        elif self.path == '/protocol': protocol_handler(self, 'GET', '')
+        else: send_json(self, {"error": "Not found"}, 404)
+    
+    def do_POST(self):
+        body = self.rfile.read(int(self.headers.get('Content-Length', 0))).decode('utf-8')
+        if self.path == '/submit': submit_handler(self, body)
+        elif self.path == '/protocol': protocol_handler(self, 'POST', body)
+        else: send_json(self, {"error": "Not found"}, 404)

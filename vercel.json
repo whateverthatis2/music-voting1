@@ -1,39 +1,10 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/*.py",
-      "use": "@vercel/python"
-    }
-  ],
+  "builds": [{"src": "api/index.py", "use": "@vercel/python"}],
   "routes": [
-    {
-      "src": "/",
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "/vote",
-      "dest": "/api/vote.py"
-    },
-    {
-      "src": "/results",
-      "dest": "/api/results.py"
-    },
-    {
-      "src": "/protocol",
-      "dest": "/api/protocol.py"
-    },
-    {
-      "src": "/vote-heuristic",
-      "dest": "/api/vote_heuristic.py"
-    },
-    {
-      "src": "/heuristic-votes",
-      "dest": "/api/heuristic_votes.py"
-    },
-    {
-      "src": "/heuristic-results",
-      "dest": "/api/heuristic_results.py"
-    }
+    {"src": "/", "dest": "/api/index.py"},
+    {"src": "/results", "dest": "/api/index.py"},
+    {"src": "/protocol", "dest": "/api/index.py"},
+    {"src": "/submit", "dest": "/api/index.py"}
   ]
 }
