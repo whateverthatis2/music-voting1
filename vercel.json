@@ -30,6 +30,22 @@
     {
       "src": "/heuristic-votes",
       "dest": "/api/heuristic_votes.py"
+    },
+    {
+      "src": "/rankings",
+      "dest": "/api/rankings.py"
+    },
+    {
+      "src": "/save-ranking",
+      "dest": "/api/save_ranking.py"
+    },
+    {
+      "src": "/ranking-count",
+      "dest": "/api/ranking_count.py"
+    },
+    {
+      "src": "/aggregated-rankings",
+      "dest": "/api/aggregated_rankings.py"
     }
   ]
 }
