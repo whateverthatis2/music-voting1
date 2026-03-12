@@ -177,45 +177,13 @@ def mutate(ranking):
     r[i], r[j] = r[j], r[i]
     return r
 
-def crossover(p1, p2):
-    """Кросовер: Order Crossover (OX)"""
-    n = len(p1)
-    a, b = sorted(random.sample(range(n), 2))
-    child = [None] * n
-    child[a:b+1] = p1[a:b+1]
-    pos = b + 1
-    for obj in p2[b+1:] + p2[:b+1]:
-        if obj not in child:
-            if pos >= n: pos = 0
-            while child[pos] is not None: pos = (pos + 1) % n
-            child[pos] = obj
-    return child
-
-def genetic_algorithm(expert_rankings, generations=100, pop_size=50):
-    """Генетичний алгоритм для пошуку компромісного ранжування"""
-    population = [OBJECTS.copy() for _ in range(pop_size)]
-    for _ in range(pop_size // 2):
-        population.append(random.sample(OBJECTS, len(OBJECTS)))
-    
-    for gen in range(generations):
-        population.sort(key=lambda x: fitness(x, expert_rankings), reverse=True)
-        new_pop = population[:pop_size//2]  # Еліта
-        while len(new_pop) < pop_size:
-            p1, p2 = random.sample(population[:20], 2)
-            child = crossover(p1, p1) if random.random() < 0.3 else crossover(p1, p2)
-            if random.random() < 0.5:
-                child = mutate(child)
-            new_pop.append(child)
-        population = new_pop
-    return population[0]
-
-def ant_colony(expert_rankings, iterations=50, ants=30):
-    """Мурашиний алгоритм"""
+def ant_colony(expert_rankings, iterations=100, ants=50):
+    """Мурашиний алгоритм для пошуку компромісного ранжування"""
     n = len(OBJECTS)
-    pheromone = [[1.0]*n for _ in range(n)]
+    pheromone = [[1.0] * n for _ in range(n)]
     best_ranking, best_fit = None, float('-inf')
     
-    for _ in range(iterations):
+    for iteration in range(iterations):
         solutions = []
         for _ in range(ants):
             solution = []
@@ -244,66 +212,32 @@ def ant_colony(expert_rankings, iterations=50, ants=30):
         
         # Оновлення феромонів
         for sol in solutions:
-            for i in range(n-1):
-                idx1, idx2 = OBJECTS.index(sol[i]), OBJECTS.index(sol[i+1])
+            for i in range(n - 1):
+                idx1, idx2 = OBJECTS.index(sol[i]), OBJECTS.index(sol[i + 1])
                 pheromone[idx1][idx2] += 0.1
         for row in pheromone:
             for i in range(len(row)):
                 row[i] *= 0.95
-    return best_ranking if best_ranking else OBJECTS.copy()
-
-def simulated_annealing(expert_rankings, iterations=1000, temp=100, cooling=0.995):
-    """Імітація відпалу"""
-    current = random.sample(OBJECTS, len(OBJECTS))
-    best, best_fit = current.copy(), fitness(current, expert_rankings)
     
-    for i in range(iterations):
-        neighbor = mutate(current)
-        delta = fitness(neighbor, expert_rankings) - fitness(current, expert_rankings)
-        if delta > 0 or random.random() < pow(2.718, delta/temp):
-            current = neighbor
-            if fitness(current, expert_rankings) > best_fit:
-                best, best_fit = current.copy(), fitness(current, expert_rankings)
-        temp *= cooling
-    return best
-
-def borda_count(expert_rankings):
-    """Метод Борда (базовий)"""
-    n = len(OBJECTS)
-    scores = {obj: 0 for obj in OBJECTS}
-    for exp in expert_rankings:
-        rank = exp.get('ranking', [])
-        for i, obj in enumerate(rank):
-            scores[obj] += (n - i)
-    return sorted(OBJECTS, key=lambda x: scores[x], reverse=True)
+    return best_ranking if best_ranking else OBJECTS.copy()
 
 # ==================== РЕЗУЛЬТАТИ ====================
 
 def results_handler(self):
     rankings = load_rankings()
-    n = len(OBJECTS)
     
-    # Різні методи агрегації
-    genetic = genetic_algorithm(rankings) if rankings else OBJECTS.copy()
+    # Тільки мурашиний алгоритм
     ant = ant_colony(rankings) if rankings else OBJECTS.copy()
-    sa = simulated_annealing(rankings) if rankings else OBJECTS.copy()
-    borda = borda_count(rankings) if rankings else OBJECTS.copy()
-    
-    # Фітнес для порівняння
-    gen_fit = fitness(genetic, rankings) if rankings else 0
     ant_fit = fitness(ant, rankings) if rankings else 0
-    sa_fit = fitness(sa, rankings) if rankings else 0
-    borda_fit = fitness(borda, rankings) if rankings else 0
     
     content = f'''<h2>📊 Результати ранжування</h2><p>Отримано ранжувань: <b>{len(rankings)}</b></p>
-    <h3>🏆 Компромісні ранжування (різними методами)</h3>
-    <table><thead><tr><th>Метод</th><th>Ранжування</th><th>Фітнес (Кеміні)</th></tr></thead><tbody>
-    <tr><td>🧬 Генетичний</td><td>{' → '.join(genetic)}</td><td>{-gen_fit}</td></tr>
-    <tr><td>🐜 Мурашиний</td><td>{' → '.join(ant)}</td><td>{-ant_fit}</td></tr>
-    <tr><td>🔥 Відпал</td><td>{' → '.join(sa)}</td><td>{-sa_fit}</td></tr>
-    <tr><td>📊 Борда</td><td>{' → '.join(borda)}</td><td>{-borda_fit}</td></tr>
-    </tbody></table>
-    <h3>📋 Ранжування експертів</h3><table><thead><tr><th>Експерт</th><th>Час</th><th>Порядок</th></tr></thead><tbody>'''
+    <h3>🐜 Компромісне ранжування (Мурашиний алгоритм)</h3>
+    <div style="background:#e6fffa;padding:20px;border-radius:8px;margin:20px 0;border:2px solid #38b2ac">
+    <p style="font-size:1.2em;margin:0"><strong>Результат:</strong></p>
+    <p style="font-size:1.5em;color:#2c7a7b;margin:10px 0">{' → '.join(ant)}</p>
+    <p style="color:#666;margin:0"><strong>Фітнес (відстань Кеміні):</strong> {-ant_fit}</p>
+    </div>
+    <h3>📋 Всі ранжування</h3><table><thead><tr><th>Експерт</th><th>Час</th><th>Порядок</th></tr></thead><tbody>'''
     for r in rankings:
         content += f'<tr><td><b>{r.get("expert","")}</b></td><td>{r.get("time","")[:19]}</td><td>{" → ".join(r.get("ranking",[]))}</td></tr>'
     content += '''</tbody></table><div class="links"><a href="/">← Ранжувати</a><a href="/protocol">🔐 Протокол</a></div>'''
