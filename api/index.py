@@ -1,7 +1,7 @@
 from http.server import BaseHTTPRequestHandler
-from .utils import OBJECTS, EXPERTS, PROTOCOL_PASSWORD, load_rankings, save_ranking, get_db, html_template
+from .utils import OBJECTS, PROTOCOL_PASSWORD, load_rankings, save_ranking, get_db, html_template
 from urllib.parse import parse_qs
-import json, random
+import json, random, time
 
 # ==================== ГОЛОВНА СТОРІНКА ====================
 
@@ -10,10 +10,7 @@ def index_handler(self):
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
     <div><h3>📦 Об'єкти</h3><div id="objectsList" style="min-height:300px;border:2px dashed #e2e8f0;border-radius:8px;padding:10px"></div></div>
     <div><h3>🎯 Порядок пріоритетів</h3><div id="rankingSlots" style="min-height:300px"></div></div></div>
-    <div style="text-align:center;margin-top:20px"><select id="expertId" style="padding:10px;font-size:16px"><option value="">-- Ваш ID --</option>'''
-    for exp in EXPERTS:
-        content += f'<option value="{exp}">{exp}</option>'
-    content += '''</select><br><button id="submitBtn" disabled style="padding:12px 30px;font-size:16px;background:#5a67d8;color:white;border:none;border-radius:6px;cursor:pointer;margin-top:15px">Зберегти ранжування</button>
+    <div style="text-align:center;margin-top:20px"><button id="submitBtn" disabled style="padding:12px 30px;font-size:16px;background:#5a67d8;color:white;border:none;border-radius:6px;cursor:pointer;margin-top:15px">Зберегти ранжування</button>
     <div id="result" style="margin-top:15px;padding:15px;border-radius:6px;display:none"></div></div>
     <div class="links"><a href="/results">📊 Результати</a><a href="/protocol">🔐 Протокол</a></div>
     <style>
@@ -25,28 +22,121 @@ def index_handler(self):
     .rank-num{font-weight:bold;color:#5a67d8;min-width:24px}.slot-placeholder{color:#999}
     </style>
     <script>
-    const objects=''' + json.dumps(OBJECTS) + ''';let ranking=[];
-    const list=document.getElementById('objectsList');const slots=document.getElementById('rankingSlots');
-    objects.forEach((o,i)=>{const div=document.createElement('div');div.className='obj-item';div.draggable=true;div.dataset.idx=i;div.innerHTML='<span class="obj-name">'+o+'</span><span class="obj-rank">'+(i+1)+'</span>';
-    div.addEventListener('dragstart',e=>{e.dataTransfer.setData('idx',i);this.classList.add('dragging');});
-    div.addEventListener('dragend',function(){this.classList.remove('dragging');});
-    div.addEventListener('click',()=>addToRanking(i));list.appendChild(div);});
-    for(let i=0;i<objects.length;i++){const slot=document.createElement('div');slot.className='rank-slot';slot.dataset.rank=i+1;slot.innerHTML='<span class="rank-num">'+(i+1)+'. </span><span class="slot-placeholder">Перетягніть об\'єкт</span>';
-    slot.addEventListener('dragover',e=>{e.preventDefault();this.classList.add('drag-over');});
-    slot.addEventListener('dragleave',function(){this.classList.remove('drag-over');});
-    slot.addEventListener('drop',function(e){e.preventDefault();this.classList.remove('drag-over');const idx=parseInt(e.dataTransfer.getData('idx'));moveToRanking(idx,this.dataset.rank);});
-    slot.addEventListener('click',function(){if(this.classList.contains('filled')){removeFromRanking(parseInt(this.dataset.rank));}});slots.appendChild(slot);}
-    function addToRanking(idx){if(ranking.includes(idx))return;ranking.push(idx);updateDisplay();}
-    function moveToRanking(idx,rank){const pos=ranking.indexOf(idx);if(pos>=0)ranking.splice(pos,1);ranking.splice(rank-1,0,idx);updateDisplay();}
-    function removeFromRanking(rank){ranking.splice(rank-1,1);updateDisplay();}
-    function updateDisplay(){document.querySelectorAll('.obj-item').forEach((el,i)=>{el.classList.toggle('in-ranking',ranking.includes(i));});
-    document.querySelectorAll('.rank-slot').forEach((slot,i)=>{const idx=ranking[i];if(idx!==undefined){const o=objects[idx];slot.classList.add('filled');slot.innerHTML='<span class="rank-num">'+(i+1)+'. </span><span class="obj-name">'+o+'</span>';}
-    else{slot.classList.remove('filled');slot.innerHTML='<span class="rank-num">'+(i+1)+'. </span><span class="slot-placeholder">Перетягніть об\'єкт</span>';}});
-    document.getElementById('submitBtn').disabled=ranking.length!==objects.length;}
-    document.getElementById('submitBtn').addEventListener('click',async()=>{const expertId=document.getElementById('expertId').value;if(!expertId){alert('Оберіть ваш ID');return;}
-    try{const response=await fetch('/submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({expert:expertId,ranking:ranking.map(i=>objects[i])})});
-    const result=await response.json();const resDiv=document.getElementById('result');if(result.success){resDiv.innerHTML='✅ Збережено!';resDiv.style.cssText='display:block;background:#c6f6d5;color:#22543d;';ranking=[];updateDisplay();}
-    else{resDiv.innerHTML='❌ '+result.error;resDiv.style.cssText='display:block;background:#fed7d7;color:#c53030;';}}catch(e){alert('Помилка: '+e.message);}});
+    const objects = [''' + ','.join("'"+o+"'" for o in OBJECTS) + '''];
+    let ranking = [];
+    const list = document.getElementById('objectsList');
+    const slots = document.getElementById('rankingSlots');
+    
+    // Створення списку об'єктів
+    objects.forEach((o, i) => {
+        const div = document.createElement('div');
+        div.className = 'obj-item';
+        div.draggable = true;
+        div.dataset.idx = i;
+        div.innerHTML = '<span class="obj-name">' + o + '</span><span class="obj-rank">' + (i+1) + '</span>';
+        div.addEventListener('dragstart', function(e) {
+            e.dataTransfer.setData('idx', this.dataset.idx);
+            this.classList.add('dragging');
+        });
+        div.addEventListener('dragend', function() {
+            this.classList.remove('dragging');
+        });
+        div.addEventListener('click', function() {
+            addToRanking(parseInt(this.dataset.idx));
+        });
+        list.appendChild(div);
+    });
+    
+    // Створення слотів для ранжування
+    for (let i = 0; i < objects.length; i++) {
+        const slot = document.createElement('div');
+        slot.className = 'rank-slot';
+        slot.dataset.rank = i + 1;
+        slot.innerHTML = '<span class="rank-num">' + (i+1) + '.</span><span class="slot-placeholder">Перетягніть об\'єкт</span>';
+        slot.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            this.classList.add('drag-over');
+        });
+        slot.addEventListener('dragleave', function() {
+            this.classList.remove('drag-over');
+        });
+        slot.addEventListener('drop', function(e) {
+            e.preventDefault();
+            this.classList.remove('drag-over');
+            const idx = parseInt(e.dataTransfer.getData('idx'));
+            moveToRanking(idx, parseInt(this.dataset.rank));
+        });
+        slot.addEventListener('click', function() {
+            if (this.classList.contains('filled')) {
+                removeFromRanking(parseInt(this.dataset.rank));
+            }
+        });
+        slots.appendChild(slot);
+    }
+    
+    function addToRanking(idx) {
+        if (ranking.includes(idx)) return;
+        ranking.push(idx);
+        updateDisplay();
+    }
+    
+    function moveToRanking(idx, rank) {
+        const pos = ranking.indexOf(idx);
+        if (pos >= 0) ranking.splice(pos, 1);
+        ranking.splice(rank - 1, 0, idx);
+        updateDisplay();
+    }
+    
+    function removeFromRanking(rank) {
+        ranking.splice(rank - 1, 1);
+        updateDisplay();
+    }
+    
+    function updateDisplay() {
+        // Оновити об'єкти
+        document.querySelectorAll('.obj-item').forEach((el, i) => {
+            el.classList.toggle('in-ranking', ranking.includes(i));
+        });
+        
+        // Оновити слоти
+        document.querySelectorAll('.rank-slot').forEach((slot, i) => {
+            const idx = ranking[i];
+            if (idx !== undefined) {
+                slot.classList.add('filled');
+                slot.innerHTML = '<span class="rank-num">' + (i+1) + '.</span><span class="obj-name">' + objects[idx] + '</span>';
+            } else {
+                slot.classList.remove('filled');
+                slot.innerHTML = '<span class="rank-num">' + (i+1) + '.</span><span class="slot-placeholder">Перетягніть об\'єкт</span>';
+            }
+        });
+        
+        // Кнопка
+        document.getElementById('submitBtn').disabled = ranking.length !== objects.length;
+    }
+    
+    // Збереження
+    document.getElementById('submitBtn').addEventListener('click', async function() {
+        try {
+            const response = await fetch('/submit', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ranking: ranking.map(i => objects[i])})
+            });
+            const result = await response.json();
+            const resDiv = document.getElementById('result');
+            if (result.success) {
+                resDiv.innerHTML = '✅ Збережено! Кількість ранжувань: ' + (ranking.length);
+                resDiv.style.cssText = 'display:block;background:#c6f6d5;color:#22543d;';
+                ranking = [];
+                updateDisplay();
+            } else {
+                resDiv.innerHTML = '❌ ' + result.error;
+                resDiv.style.cssText = 'display:block;background:#fed7d7;color:#c53030;';
+            }
+        } catch (e) {
+            alert('Помилка: ' + e.message);
+        }
+    });
     </script>'''
     self.send_response(200)
     self.send_header('Content-type', 'text/html; charset=utf-8')
@@ -57,11 +147,12 @@ def index_handler(self):
 
 def submit_handler(self, body):
     data = json.loads(body) if body else {}
-    expert, ranking = data.get('expert'), data.get('ranking')
-    if not expert or expert not in EXPERTS:
-        return send_json(self, {"error": "Невірний експерт"})
+    ranking = data.get('ranking')
     if not ranking or len(ranking) != len(OBJECTS):
         return send_json(self, {"error": "Неповне ранжування"})
+    # Generate unique expert ID based on timestamp
+    import time
+    expert = "Експерт_" + str(int(time.time() % 10000))
     if save_ranking(expert, ranking):
         send_json(self, {"success": True})
     else:
@@ -204,7 +295,7 @@ def results_handler(self):
     sa_fit = fitness(sa, rankings) if rankings else 0
     borda_fit = fitness(borda, rankings) if rankings else 0
     
-    content = f'''<h2>📊 Результати ранжування</h2><p>Експертів: <b>{len(rankings)}</b>/{len(EXPERTS)}</p>
+    content = f'''<h2>📊 Результати ранжування</h2><p>Отримано ранжувань: <b>{len(rankings)}</b></p>
     <h3>🏆 Компромісні ранжування (різними методами)</h3>
     <table><thead><tr><th>Метод</th><th>Ранжування</th><th>Фітнес (Кеміні)</th></tr></thead><tbody>
     <tr><td>🧬 Генетичний</td><td>{' → '.join(genetic)}</td><td>{-gen_fit}</td></tr>

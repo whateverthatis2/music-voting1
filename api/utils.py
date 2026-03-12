@@ -3,9 +3,6 @@
 # 10 об'єктів для ранжування
 OBJECTS = ["Об'єкт "+str(i) for i in range(1, 11)]
 
-# 5-8 експертів
-EXPERTS = ["Експерт "+str(i) for i in range(1, 9)]
-
 # Пароль для перегляду протоколу
 PROTOCOL_PASSWORD = "0000"
 
