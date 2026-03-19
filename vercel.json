@@ -2,14 +2,12 @@
   "version": 2,
   "routes": [
     { "src": "/", "dest": "/api/index.py" },
-    { "src": "/results", "dest": "/api/results.py" },
-    { "src": "/protocol", "dest": "/api/protocol.py" },
-    { "src": "/rankings", "dest": "/api/rankings.py" },
-    { "src": "/aggregated-rankings", "dest": "/api/rankings.py" },
-    { "src": "/save-ranking", "dest": "/api/rankings.py" },
-    { "src": "/lab3", "dest": "/api/lab3.py" },
-    { "src": "/lab3/matrix", "dest": "/api/lab3.py" },
-    { "src": "/lab3/bruteforce", "dest": "/api/lab3.py" },
-    { "src": "/lab3/genetic", "dest": "/api/lab3.py" }
+    { "src": "/submit", "dest": "/api/index.py" },
+    { "src": "/results", "dest": "/api/index.py" },
+    { "src": "/protocol", "dest": "/api/index.py" },
+    { "src": "/lab3", "dest": "/api/index.py" },
+    { "src": "/lab3/matrix", "dest": "/api/index.py" },
+    { "src": "/lab3/brute", "dest": "/api/index.py" },
+    { "src": "/lab3/ga", "dest": "/api/index.py" }
   ]
 }
