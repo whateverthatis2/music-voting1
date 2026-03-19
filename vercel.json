@@ -5,6 +5,10 @@
     {"src": "/", "dest": "/api/index.py"},
     {"src": "/results", "dest": "/api/index.py"},
     {"src": "/protocol", "dest": "/api/index.py"},
-    {"src": "/submit", "dest": "/api/index.py"}
+    {"src": "/submit", "dest": "/api/index.py"},
+    { "src": "/lab3", "dest": "/api/lab3.py" },
+    { "src": "/lab3/matrix", "dest": "/api/lab3.py" },
+    { "src": "/lab3/bruteforce", "dest": "/api/lab3.py" },
+    { "src": "/lab3/genetic", "dest": "/api/lab3.py" }
   ]
 }
