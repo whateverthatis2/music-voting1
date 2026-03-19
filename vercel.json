@@ -7,12 +7,9 @@
     { "src": "/rankings", "dest": "/api/rankings.py" },
     { "src": "/aggregated-rankings", "dest": "/api/rankings.py" },
     { "src": "/save-ranking", "dest": "/api/rankings.py" },
-    { "src": "/vote-heuristic", "dest": "/api/index.py" },
-    { "src": "/heuristic-votes", "dest": "/api/index.py" },
     { "src": "/lab3", "dest": "/api/lab3.py" },
     { "src": "/lab3/matrix", "dest": "/api/lab3.py" },
     { "src": "/lab3/bruteforce", "dest": "/api/lab3.py" },
-    { "src": "/lab3/genetic", "dest": "/api/lab3.py" },
-    { "src": "/lab3(.*)", "dest": "/api/lab3.py" }
+    { "src": "/lab3/genetic", "dest": "/api/lab3.py" }
   ]
 }
