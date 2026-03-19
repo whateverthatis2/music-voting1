@@ -4,6 +4,7 @@ from .utils import html, get_db, OBJECTS
 from itertools import permutations
 from math import factorial
 import json
+import random
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -29,8 +30,11 @@ class handler(BaseHTTPRequestHandler):
     def matrix(self):
         try:
             db = get_db()
-            rankings = list(db.rankings.find({}, {'_id': 0}))
-        except: rankings = []
+            # ЧИТАЄМО З music_voting.votes (Лаб №1)
+            votes = list(db.votes.find({}, {'_id': 0}))
+        except Exception as e:
+            votes = []
+            print(f"Error: {e}")
         
         # Матриця попарних переваг
         matrix = {}
@@ -38,11 +42,11 @@ class handler(BaseHTTPRequestHandler):
             for g2 in OBJECTS:
                 if g1 != g2: matrix[(g1,g2)] = 0
         
-        for r in rankings:
-            rank = r.get('ranking', [])
-            for i in range(len(rank)):
-                for j in range(i+1, len(rank)):
-                    a, b = rank[i], rank[j]
+        for v in votes:
+            prefs = v.get('preferences', [])
+            for i in range(len(prefs)):
+                for j in range(i+1, len(prefs)):
+                    a, b = prefs[i], prefs[j]
                     if a in OBJECTS and b in OBJECTS:
                         matrix[(a,b)] = matrix.get((a,b), 0) + 1
         
@@ -53,12 +57,12 @@ class handler(BaseHTTPRequestHandler):
                 if g1 == g2: row += "<td>-</td>"
                 else:
                     c = matrix.get((g1,g2), 0)
-                    bg = "#c6f6d5" if c > len(rankings)/2 else "#fed7d7"
+                    bg = "#c6f6d5" if c > len(votes)/2 else "#fed7d7"
                     row += f"<td style='background:{bg};text-align:center'>{c}</td>"
             row += "</tr>"; rows += row
         
         content = f'''
-        <div class="info">Матриця попарних переваг<br>Число = скільки разів РЯДОК був вище СТОВПЦЯ</div>
+        <div class="info">Матриця попарних переваг<br>Число = скільки разів РЯДОК був вище СТОВПЦЯ<br>Всього голосів: {len(votes)}</div>
         <table><thead><tr><th>A vs B</th>{"".join([f"<th>{g}</th>" for g in OBJECTS])}</tr></thead><tbody>{rows}</tbody></table>
         <p><a href="/">← Назад</a> | <a href="/brute">→ Прямий перебір</a></p>
         '''
@@ -70,22 +74,25 @@ class handler(BaseHTTPRequestHandler):
     def brute(self):
         try:
             db = get_db()
-            rankings = list(db.rankings.find({}, {'_id': 0}))
-        except: rankings = []
+            votes = list(db.votes.find({}, {'_id': 0}))
+        except:
+            votes = []
         
         n = len(OBJECTS)
         perms = factorial(n)
         
-        # Метод Борда як референс
+        # Метод Борда на основі votes
         scores = {g: 0 for g in OBJECTS}
-        for r in rankings:
-            rank = r.get('ranking', [])
-            for i, g in enumerate(rank):
-                if g in OBJECTS: scores[g] += (n - i)
+        for v in votes:
+            prefs = v.get('preferences', [])
+            if len(prefs) > 0: scores[prefs[0]] += 3
+            if len(prefs) > 1: scores[prefs[1]] += 2
+            if len(prefs) > 2: scores[prefs[2]] += 1
+        
         borda = [g for g, _ in sorted(scores.items(), key=lambda x: x[1], reverse=True)]
         
         content = f'''
-        <div class="info">Об'єктів: {n}<br>Перестановок (n!): {perms:,}<br>Ранжувань в БД: {len(rankings)}</div>
+        <div class="info">Об'єктів: {n}<br>Перестановок (n!): {perms:,}<br>Голосів в БД: {len(votes)}</div>
         <h3>Результат (метод Борда):</h3>
         <ol>{"".join([f"<li>{g}</li>" for g in borda])}</ol>
         <p><em>Повний перебір {perms:,} перестановок вимагає значних обчислень.</em></p>
@@ -99,13 +106,14 @@ class handler(BaseHTTPRequestHandler):
     def ga(self):
         try:
             db = get_db()
-            rankings = list(db.rankings.find({}, {'_id': 0}))
-        except: rankings = []
+            votes = list(db.votes.find({}, {'_id': 0}))
+        except:
+            votes = []
         
-        if len(rankings) < 3:
+        if len(votes) < 3:
             content = f'''
             <div class="info" style="background:#fed7d7;border-color:#e53e3e">
-            ⚠️ Недостатньо даних<br>Потрібно мінімум 3 ранжування (зараз {len(rankings)}).
+            ⚠️ Недостатньо даних<br>Потрібно мінімум 3 голоси (зараз {len(votes)}).
             </div>
             <p><a href="/">← Назад</a></p>
             '''
@@ -115,15 +123,18 @@ class handler(BaseHTTPRequestHandler):
             self.wfile.write(html("ГА", content).encode('utf-8'))
             return
         
-        import random
         POP_SIZE, GENERATIONS, MUT_RATE = 20, 50, 0.3
         
         def fitness(ind):
             total = 0
-            for r in rankings:
-                exp = r.get('ranking', [])
-                for i, obj in enumerate(ind):
-                    if obj in exp: total += abs(i - exp.index(obj))
+            for v in votes:
+                prefs = v.get('preferences', [])
+                if len(prefs) >= 3:
+                    a, b, c = prefs[0], prefs[1], prefs[2]
+                    ranks = {obj: i for i, obj in enumerate(ind)}
+                    if a in ranks and b in ranks and c in ranks:
+                        if not (ranks[a] < ranks[b] < ranks[c]):
+                            total += 1
             return -total
         
         pop = [OBJECTS.copy() for _ in range(POP_SIZE)]
@@ -146,16 +157,17 @@ class handler(BaseHTTPRequestHandler):
         
         # Порівняння з Борда
         scores = {g: 0 for g in OBJECTS}
-        for r in rankings:
-            rank = r.get('ranking', [])
-            for i, g in enumerate(rank):
-                if g in OBJECTS: scores[g] += (len(OBJECTS) - i)
+        for v in votes:
+            prefs = v.get('preferences', [])
+            if len(prefs) > 0: scores[prefs[0]] += 3
+            if len(prefs) > 1: scores[prefs[1]] += 2
+            if len(prefs) > 2: scores[prefs[2]] += 1
         borda = [g for g, _ in sorted(scores.items(), key=lambda x: x[1], reverse=True)]
         
         comp = "".join([f"<tr><td>{i+1}</td><td>{ga}</td><td>{bo}</td><td>{'✅' if ga==bo else '❌'}</td></tr>" for i,(ga,bo) in enumerate(zip(ga_result, borda))])
         
         content = f'''
-        <div class="info">Параметри ГА:<br>Популяція: {POP_SIZE} | Поколінь: {GENERATIONS} | Мутація: {MUT_RATE*100:.0f}%</div>
+        <div class="info">Параметри ГА:<br>Популяція: {POP_SIZE} | Поколінь: {GENERATIONS} | Мутація: {MUT_RATE*100:.0f}%<br>Голосів: {len(votes)}</div>
         <h3>Результат ГА:</h3>
         <ol>{"".join([f"<li>{g}</li>" for g in ga_result])}</ol>
         <h3>Порівняння з методом Борда:</h3>
