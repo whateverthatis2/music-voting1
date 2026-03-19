@@ -12,6 +12,7 @@
     { "src": "/lab3", "dest": "/api/lab3.py" },
     { "src": "/lab3/matrix", "dest": "/api/lab3.py" },
     { "src": "/lab3/bruteforce", "dest": "/api/lab3.py" },
-    { "src": "/lab3/genetic", "dest": "/api/lab3.py" }
+    { "src": "/lab3/genetic", "dest": "/api/lab3.py" },
+    { "src": "/lab3(.*)", "dest": "/api/lab3.py" }
   ]
 }
