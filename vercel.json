@@ -2,12 +2,8 @@
   "version": 2,
   "routes": [
     { "src": "/", "dest": "/api/index.py" },
-    { "src": "/submit", "dest": "/api/index.py" },
-    { "src": "/results", "dest": "/api/index.py" },
-    { "src": "/protocol", "dest": "/api/index.py" },
-    { "src": "/lab3", "dest": "/api/index.py" },
-    { "src": "/lab3/matrix", "dest": "/api/index.py" },
-    { "src": "/lab3/brute", "dest": "/api/index.py" },
-    { "src": "/lab3/ga", "dest": "/api/index.py" }
+    { "src": "/matrix", "dest": "/api/index.py" },
+    { "src": "/brute", "dest": "/api/index.py" },
+    { "src": "/ga", "dest": "/api/index.py" }
   ]
 }
