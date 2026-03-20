@@ -6,10 +6,17 @@ _db = None
 
 def get_db():
     global _db
-    if _db: return _db
+    # ✅ Правильна перевірка: is not None (не просто "if _db")
+    if _db is not None:
+        return _db
+    
     uri = os.environ.get('MONGODB_URI')
-    if not uri: raise ValueError("MONGODB_URI missing")
-    _db = MongoClient(uri, server_api=ServerApi('1'), connectTimeoutMS=5000).music_voting
+    if not uri:
+        raise ValueError("MONGODB_URI missing")
+    
+    # Підключаємось і повертаємо базу
+    client = MongoClient(uri, server_api=ServerApi('1'), connectTimeoutMS=5000)
+    _db = client.music_voting
     return _db
 
 OBJECTS = ["Поп","Рок","Фолк","Реп","Електронна","Інді","Джаз","Класична","Метал","R&B/Soul"]
