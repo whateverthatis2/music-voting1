@@ -1,33 +1,30 @@
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from .utils import html, get_db, OBJECTS
-from itertools import permutations
-from math import factorial
 import json
-import random
+from datetime import datetime
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = urlparse(self.path).path
         if path == '/': self.main()
-        elif path == '/matrix': self.matrix()
-        elif path == '/brute': self.brute()
-        elif path == '/ga': self.ga()
-        elif path == '/lab3/add': self.add_form()  # НОВА СТОРІНКА
+        elif path == '/lab3/matrix': self.matrix()
+        elif path == '/lab3/brute': self.brute()
+        elif path == '/lab3/ga': self.ga()
         else: self.send_error(404)
     
     def do_POST(self):
         path = urlparse(self.path).path
-        if path == '/lab3/add': self.add_vote()  # НОВИЙ POST
+        if path == '/lab3/add': self.add_vote()
         else: self.send_error(404)
     
     def main(self):
         content = '''
         <div class="info">Лабораторна №3: Колективне ранжування</div>
-        <p><a href="/lab3/add" style="background:#48bb78;color:white;padding:10px 20px;border-radius:6px;text-decoration:none">➕ Додати голос</a></p>
-        <p><a href="/matrix">📋 Матриця переваг</a></p>
-        <p><a href="/brute">🔄 Прямий перебір (n!)</a></p>
-        <p><a href="/ga">🧬 Генетичний алгоритм</a></p>
+        <p><a href="/lab3/add" style="background:#48bb78;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;margin:5px">➕ Додати голос</a></p>
+        <p><a href="/lab3/matrix" style="background:#5a67d8;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;margin:5px">📋 Матриця переваг</a></p>
+        <p><a href="/lab3/brute" style="background:#ed8936;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;margin:5px">🔄 Прямий перебір</a></p>
+        <p><a href="/lab3/ga" style="background:#9f7aea;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;margin:5px">🧬 Генетичний алгоритм</a></p>
         '''
         self.send_response(200)
         self.send_header('Content-type', 'text/html; charset=utf-8')
@@ -37,40 +34,46 @@ class handler(BaseHTTPRequestHandler):
     def add_form(self):
         objects_json = json.dumps(OBJECTS, ensure_ascii=False)
         content = f'''
-        <div class="info">Додати експертне ранжування для Лаб №3</div>
-        <form method="POST" action="/lab3/add" style="max-width:500px">
-            <p><strong>Перетягуйте жанри для зміни порядку:</strong></p>
-            <div id="slots" style="display:flex;flex-direction:column;gap:8px;margin:20px 0"></div>
-            <input type="hidden" name="ranking" id="rankingInput">
-            <button type="submit" style="background:#5a67d8;color:white;padding:12px 30px;border:none;border-radius:6px;cursor:pointer;font-size:16px">Зберегти ранжування</button>
+        <div class="info">Додати експертне ранжування</div>
+        <form method="POST" action="/lab3/add">
+            <div id="ranking" style="display:flex;flex-direction:column;gap:10px;margin:20px 0">
+                {"".join([f'<div class="rank-item" data-idx="{i}"><span class="rank-num">{i+1}.</span><span class="obj-name">{obj}</span><button type="button" onclick="moveUp({i})" {"" if i==0 else ""}>↑</button><button type="button" onclick="moveDown({i})" {"" if i==len(OBJECTS)-1 else ""}>↓</button></div>' for i, obj in enumerate(OBJECTS)])}
+            </div>
+            <input type="hidden" name="ranking" id="rankingInput" value='{objects_json}'>
+            <button type="submit" style="background:#5a67d8;color:white;padding:12px 30px;border:none;border-radius:6px;cursor:pointer;font-size:16px">Зберегти</button>
         </form>
         <p><a href="/">← Назад</a></p>
+        <style>
+        .rank-item{{display:flex;align-items:center;gap:15px;padding:12px;background:#f7fafc;border:2px solid #e2e8f0;border-radius:6px}}
+        .rank-num{{font-weight:bold;color:#5a67d8;min-width:30px}}
+        .obj-name{{flex-grow:1;font-weight:500}}
+        .rank-item button{{background:#5a67d8;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:18px}}
+        .rank-item button:disabled{{background:#cbd5e0;cursor:not-allowed}}
+        </style>
         <script>
-        const objects = {objects_json};
-        let ranking = [...objects];
-        const container = document.getElementById('slots');
-        
-        function render() {{
-            container.innerHTML = '';
-            ranking.forEach((obj, idx) => {{
-                const div = document.createElement('div');
-                div.style = "padding:12px;background:white;border:2px solid #e2e8f0;border-radius:6px;cursor:grab;display:flex;justify-content:space-between";
-                div.innerHTML = `<span><strong>${{idx+1}}.</strong> ${{obj}}</span><span>☰</span>`;
-                div.draggable = true;
-                div.ondragstart = e => e.dataTransfer.setData('idx', idx);
-                div.ondragover = e => e.preventDefault();
-                div.ondrop = e => {{
-                    e.preventDefault();
-                    const from = parseInt(e.dataTransfer.getData('idx'));
-                    const to = idx;
-                    [ranking[from], ranking[to]] = [ranking[to], ranking[from]];
-                    render();
-                }};
-                container.appendChild(div);
-            }});
-            document.getElementById('rankingInput').value = JSON.stringify(ranking);
+        function moveUp(idx) {{
+            const items = document.querySelectorAll('.rank-item');
+            if (idx > 0) {{
+                items[idx].parentNode.insertBefore(items[idx], items[idx-1]);
+                updateNumbers();
+            }}
         }}
-        render();
+        function moveDown(idx) {{
+            const items = document.querySelectorAll('.rank-item');
+            if (idx < items.length - 1) {{
+                items[idx].parentNode.insertBefore(items[idx+1], items[idx]);
+                updateNumbers();
+            }}
+        }}
+        function updateNumbers() {{
+            const items = document.querySelectorAll('.rank-item');
+            const order = [];
+            items.forEach((item, i) => {{
+                item.querySelector('.rank-num').textContent = (i+1) + '.';
+                order.push(item.querySelector('.obj-name').textContent);
+            }});
+            document.getElementById('rankingInput').value = JSON.stringify(order);
+        }}
         </script>
         '''
         self.send_response(200)
@@ -80,19 +83,27 @@ class handler(BaseHTTPRequestHandler):
     
     def add_vote(self):
         try:
+            # Читаємо дані з форми
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_data = self.rfile.read(content_length).decode('utf-8')
+            params = parse_qs(post_data)
+            ranking_str = params.get('ranking', [''])[0]
+            ranking = json.loads(ranking_str)
+            
+            # Зберігаємо в БД
             db = get_db()
-            # Зберігаємо в music_voting.votes (для Лаб 3)
             count = db.votes.count_documents({})
             db.votes.insert_one({
                 "num": count + 1,
-                "preferences": json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))).decode()).get('ranking', []),
-                "time": __import__('datetime').datetime.now().isoformat()
+                "preferences": ranking,
+                "time": datetime.now().isoformat()
             })
+            
             content = f'''
             <div class="info" style="background:#c6f6d5;border-color:#48bb78">
             ✅ Збережено! Всього голосів: {count + 1}
             </div>
-            <p><a href="/lab3/add">→ Додати ще</a> | <a href="/matrix">→ Матриця</a> | <a href="/">← На головну</a></p>
+            <p><a href="/lab3/add">→ Додати ще</a> | <a href="/lab3/matrix">→ Матриця</a> | <a href="/">← На головну</a></p>
             '''
         except Exception as e:
             content = f'<div class="info" style="background:#fed7d7;border-color:#e53e3e">❌ Помилка: {str(e)}</div><p><a href="/lab3/add">← Назад</a></p>'
@@ -137,7 +148,7 @@ class handler(BaseHTTPRequestHandler):
         content = f'''
         <div class="info">Матриця попарних переваг<br>Всього голосів: <strong>{len(votes)}</strong></div>
         <table><thead><tr><th>A vs B</th>{"".join([f"<th>{g}</th>" for g in OBJECTS])}</tr></thead><tbody>{rows}</tbody></table>
-        <p><a href="/">← Назад</a> | <a href="/lab3/add">→ Додати голос</a> | <a href="/brute">→ Прямий перебір</a></p>
+        <p><a href="/">← Назад</a> | <a href="/lab3/add">→ Додати голос</a> | <a href="/lab3/brute">→ Прямий перебір</a></p>
         '''
         self.send_response(200)
         self.send_header('Content-type', 'text/html; charset=utf-8')
@@ -152,6 +163,7 @@ class handler(BaseHTTPRequestHandler):
             votes = []
         
         n = len(OBJECTS)
+        from math import factorial
         perms = factorial(n)
         
         scores = {g: 0 for g in OBJECTS}
@@ -166,7 +178,7 @@ class handler(BaseHTTPRequestHandler):
         <div class="info">Об'єктів: {n}<br>Перестановок (n!): {perms:,}<br>Голосів в БД: <strong>{len(votes)}</strong></div>
         <h3>Результат (метод Борда):</h3>
         <ol>{"".join([f"<li>{g}</li>" for g in borda])}</ol>
-        <p><a href="/">← Назад</a> | <a href="/lab3/add">→ Додати голос</a> | <a href="/ga">→ ГА</a></p>
+        <p><a href="/">← Назад</a> | <a href="/lab3/add">→ Додати голос</a> | <a href="/lab3/ga">→ ГА</a></p>
         '''
         self.send_response(200)
         self.send_header('Content-type', 'text/html; charset=utf-8')
@@ -194,6 +206,7 @@ class handler(BaseHTTPRequestHandler):
             self.wfile.write(html("ГА", content).encode('utf-8'))
             return
         
+        import random
         POP_SIZE, GENERATIONS, MUT_RATE = 20, 50, 0.3
         
         def fitness(ind):
@@ -237,7 +250,7 @@ class handler(BaseHTTPRequestHandler):
         <ol>{"".join([f"<li>{g}</li>" for g in ga_result])}</ol>
         <h3>Порівняння з методом Борда:</h3>
         <table><thead><tr><th>Ранг</th><th>ГА</th><th>Борда</th><th>Збіг</th></tr></thead><tbody>{comp}</tbody></table>
-        <p><a href="/">← Назад</a> | <a href="/lab3/add">→ Додати голос</a> | <a href="/brute">← Прямий перебір</a></p>
+        <p><a href="/">← Назад</a> | <a href="/lab3/add">→ Додати голос</a> | <a href="/lab3/brute">← Прямий перебір</a></p>
         '''
         self.send_response(200)
         self.send_header('Content-type', 'text/html; charset=utf-8')
