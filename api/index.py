@@ -37,11 +37,11 @@ class handler(BaseHTTPRequestHandler):
     
     def add_form(self):
         objects_json = json.dumps(OBJECTS, ensure_ascii=False)
-        items = "".join([f'<div class="rank-item" data-idx="{i}"><span class="rank-num">{i+1}.</span><span class="obj-name">{obj}</span><button type="button" onclick="moveUp({i})" {"disabled" if i==0 else ""}>↑</button><button type="button" onclick="moveDown({i})" {"disabled" if i==len(OBJECTS)-1 else ""}>↓</button></div>' for i, obj in enumerate(OBJECTS)])
+        items = "".join([f'<div class="rank-item" data-idx="{i}" draggable="true"><span class="rank-num">{i+1}.</span><span class="obj-name">{obj}</span><span class="drag-handle">☰</span></div>' for i, obj in enumerate(OBJECTS)])
         content = f'''
-        <div class="info">Додати експертне ранжування</div>
+        <div class="info">Додати експертне ранжування<br><strong>Перетягуйте жанри для зміни порядку</strong></div>
         <form method="POST" action="/lab3/add">
-            <div id="ranking" style="display:flex;flex-direction:column;gap:10px;margin:20px 0">
+            <div id="ranking" style="display:flex;flex-direction:column;gap:8px;margin:20px 0;max-width:500px">
                 {items}
             </div>
             <input type="hidden" name="ranking" id="rankingInput" value='{objects_json}'>
@@ -49,27 +49,58 @@ class handler(BaseHTTPRequestHandler):
         </form>
         <p><a href="/">← Назад</a></p>
         <style>
-        .rank-item{{display:flex;align-items:center;gap:15px;padding:12px;background:#f7fafc;border:2px solid #e2e8f0;border-radius:6px}}
+        .rank-item{{display:flex;align-items:center;gap:15px;padding:12px;background:#f7fafc;border:2px solid #e2e8f0;border-radius:6px;cursor:grab;transition:all 0.2s}}
+        .rank-item:hover{{border-color:#5a67d8;background:#f0f4ff}}
+        .rank-item.dragging{{opacity:0.5;border-style:dashed}}
         .rank-num{{font-weight:bold;color:#5a67d8;min-width:30px}}
         .obj-name{{flex-grow:1;font-weight:500}}
-        .rank-item button{{background:#5a67d8;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:18px}}
-        .rank-item button:disabled{{background:#cbd5e0;cursor:not-allowed}}
+        .drag-handle{{color:#a0aec0;font-size:20px;cursor:grab}}
         </style>
         <script>
-        function moveUp(idx) {{
-            const items = document.querySelectorAll('.rank-item');
-            if (idx > 0) {{
-                items[idx].parentNode.insertBefore(items[idx], items[idx-1]);
-                updateNumbers();
+        const ranking = document.getElementById('ranking');
+        let draggedItem = null;
+        
+        ranking.addEventListener('dragstart', (e) => {{
+            draggedItem = e.target.closest('.rank-item');
+            if (draggedItem) {{
+                draggedItem.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
             }}
-        }}
-        function moveDown(idx) {{
-            const items = document.querySelectorAll('.rank-item');
-            if (idx < items.length - 1) {{
-                items[idx].parentNode.insertBefore(items[idx+1], items[idx]);
-                updateNumbers();
+        }});
+        
+        ranking.addEventListener('dragend', () => {{
+            if (draggedItem) {{
+                draggedItem.classList.remove('dragging');
+                draggedItem = null;
             }}
+            updateNumbers();
+        }});
+        
+        ranking.addEventListener('dragover', (e) => {{
+            e.preventDefault();
+            const afterElement = getDragAfterElement(ranking, e.clientY);
+            if (draggedItem) {{
+                if (afterElement == null) {{
+                    ranking.appendChild(draggedItem);
+                }} else {{
+                    ranking.insertBefore(draggedItem, afterElement);
+                }}
+            }}
+        }});
+        
+        function getDragAfterElement(container, y) {{
+            const draggableElements = [...container.querySelectorAll('.rank-item:not(.dragging)')];
+            return draggableElements.reduce((closest, child) => {{
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+                if (offset < 0 && offset > closest.offset) {{
+                    return {{ offset: offset, element: child }};
+                }} else {{
+                    return closest;
+                }}
+            }}, {{ offset: Number.NEGATIVE_INFINITY }}).element;
         }}
+        
         function updateNumbers() {{
             const items = document.querySelectorAll('.rank-item');
             const order = [];
@@ -79,6 +110,9 @@ class handler(BaseHTTPRequestHandler):
             }});
             document.getElementById('rankingInput').value = JSON.stringify(order);
         }}
+        
+        // Ініціалізація
+        updateNumbers();
         </script>
         '''
         self.send_response(200)
@@ -168,7 +202,6 @@ class handler(BaseHTTPRequestHandler):
         n = len(OBJECTS)
         perms = factorial(n)
         
-        # Метод Борда
         scores = {g: 0 for g in OBJECTS}
         for v in votes:
             prefs = v.get('preferences', [])
@@ -238,7 +271,6 @@ class handler(BaseHTTPRequestHandler):
         
         ga_result = pop[0]
         
-        # Порівняння з Борда
         scores = {g: 0 for g in OBJECTS}
         for v in votes:
             prefs = v.get('preferences', [])
