@@ -1,13 +1,17 @@
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from .utils import html, get_db, OBJECTS
+from itertools import permutations
+from math import factorial
 import json
+import random
 from datetime import datetime
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = urlparse(self.path).path
         if path == '/': self.main()
+        elif path == '/lab3/add': self.add_form()
         elif path == '/lab3/matrix': self.matrix()
         elif path == '/lab3/brute': self.brute()
         elif path == '/lab3/ga': self.ga()
@@ -33,14 +37,15 @@ class handler(BaseHTTPRequestHandler):
     
     def add_form(self):
         objects_json = json.dumps(OBJECTS, ensure_ascii=False)
+        items = "".join([f'<div class="rank-item" data-idx="{i}"><span class="rank-num">{i+1}.</span><span class="obj-name">{obj}</span><button type="button" onclick="moveUp({i})" {"disabled" if i==0 else ""}>↑</button><button type="button" onclick="moveDown({i})" {"disabled" if i==len(OBJECTS)-1 else ""}>↓</button></div>' for i, obj in enumerate(OBJECTS)])
         content = f'''
         <div class="info">Додати експертне ранжування</div>
         <form method="POST" action="/lab3/add">
             <div id="ranking" style="display:flex;flex-direction:column;gap:10px;margin:20px 0">
-                {"".join([f'<div class="rank-item" data-idx="{i}"><span class="rank-num">{i+1}.</span><span class="obj-name">{obj}</span><button type="button" onclick="moveUp({i})" {"" if i==0 else ""}>↑</button><button type="button" onclick="moveDown({i})" {"" if i==len(OBJECTS)-1 else ""}>↓</button></div>' for i, obj in enumerate(OBJECTS)])}
+                {items}
             </div>
             <input type="hidden" name="ranking" id="rankingInput" value='{objects_json}'>
-            <button type="submit" style="background:#5a67d8;color:white;padding:12px 30px;border:none;border-radius:6px;cursor:pointer;font-size:16px">Зберегти</button>
+            <button type="submit" style="background:#5a67d8;color:white;padding:12px 30px;border:none;border-radius:6px;cursor:pointer;font-size:16px">Зберегти ранжування</button>
         </form>
         <p><a href="/">← Назад</a></p>
         <style>
@@ -83,14 +88,12 @@ class handler(BaseHTTPRequestHandler):
     
     def add_vote(self):
         try:
-            # Читаємо дані з форми
             content_length = int(self.headers.get('Content-Length', 0))
             post_data = self.rfile.read(content_length).decode('utf-8')
             params = parse_qs(post_data)
             ranking_str = params.get('ranking', [''])[0]
             ranking = json.loads(ranking_str)
             
-            # Зберігаємо в БД
             db = get_db()
             count = db.votes.count_documents({})
             db.votes.insert_one({
@@ -119,7 +122,7 @@ class handler(BaseHTTPRequestHandler):
             votes = list(db.votes.find({}, {'_id': 0}))
         except Exception as e:
             votes = []
-            print(f"Error: {e}")
+            print(f"Error loading votes: {e}")
         
         matrix = {}
         for g1 in OBJECTS:
@@ -146,7 +149,7 @@ class handler(BaseHTTPRequestHandler):
             row += "</tr>"; rows += row
         
         content = f'''
-        <div class="info">Матриця попарних переваг<br>Всього голосів: <strong>{len(votes)}</strong></div>
+        <div class="info">Матриця попарних переваг<br>Число = скільки разів <strong>РЯДОК</strong> був вище <strong>СТОВПЦЯ</strong><br>Всього голосів: <strong>{len(votes)}</strong></div>
         <table><thead><tr><th>A vs B</th>{"".join([f"<th>{g}</th>" for g in OBJECTS])}</tr></thead><tbody>{rows}</tbody></table>
         <p><a href="/">← Назад</a> | <a href="/lab3/add">→ Додати голос</a> | <a href="/lab3/brute">→ Прямий перебір</a></p>
         '''
@@ -163,9 +166,9 @@ class handler(BaseHTTPRequestHandler):
             votes = []
         
         n = len(OBJECTS)
-        from math import factorial
         perms = factorial(n)
         
+        # Метод Борда
         scores = {g: 0 for g in OBJECTS}
         for v in votes:
             prefs = v.get('preferences', [])
@@ -178,6 +181,7 @@ class handler(BaseHTTPRequestHandler):
         <div class="info">Об'єктів: {n}<br>Перестановок (n!): {perms:,}<br>Голосів в БД: <strong>{len(votes)}</strong></div>
         <h3>Результат (метод Борда):</h3>
         <ol>{"".join([f"<li>{g}</li>" for g in borda])}</ol>
+        <p><em>Повний перебір {perms:,} перестановок вимагає значних обчислень. Для демонстрації показано результат методу Борда.</em></p>
         <p><a href="/">← Назад</a> | <a href="/lab3/add">→ Додати голос</a> | <a href="/lab3/ga">→ ГА</a></p>
         '''
         self.send_response(200)
@@ -206,7 +210,6 @@ class handler(BaseHTTPRequestHandler):
             self.wfile.write(html("ГА", content).encode('utf-8'))
             return
         
-        import random
         POP_SIZE, GENERATIONS, MUT_RATE = 20, 50, 0.3
         
         def fitness(ind):
@@ -235,6 +238,7 @@ class handler(BaseHTTPRequestHandler):
         
         ga_result = pop[0]
         
+        # Порівняння з Борда
         scores = {g: 0 for g in OBJECTS}
         for v in votes:
             prefs = v.get('preferences', [])
@@ -245,7 +249,7 @@ class handler(BaseHTTPRequestHandler):
         comp = "".join([f"<tr><td>{i+1}</td><td>{ga}</td><td>{bo}</td><td>{'✅' if ga==bo else '❌'}</td></tr>" for i,(ga,bo) in enumerate(zip(ga_result, borda))])
         
         content = f'''
-        <div class="info">Параметри ГА:<br>Популяція: {POP_SIZE} | Поколінь: {GENERATIONS} | Голосів: <strong>{len(votes)}</strong></div>
+        <div class="info">Параметри ГА:<br>Популяція: {POP_SIZE} | Поколінь: {GENERATIONS} | Мутація: {MUT_RATE*100:.0f}%<br>Голосів: <strong>{len(votes)}</strong></div>
         <h3>Результат ГА:</h3>
         <ol>{"".join([f"<li>{g}</li>" for g in ga_result])}</ol>
         <h3>Порівняння з методом Борда:</h3>
