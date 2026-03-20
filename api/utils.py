@@ -9,7 +9,6 @@ def get_db():
     if _db: return _db
     uri = os.environ.get('MONGODB_URI')
     if not uri: raise ValueError("MONGODB_URI missing")
-    # Важливо: music_voting - назва бази даних
     _db = MongoClient(uri, server_api=ServerApi('1'), connectTimeoutMS=5000).music_voting
     return _db
 
