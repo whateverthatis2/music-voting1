@@ -212,9 +212,8 @@ class handler(BaseHTTPRequestHandler):
         
         content = f'''
         <div class="info">Об'єктів: {n}<br>Перестановок (n!): {perms:,}<br>Голосів в БД: <strong>{len(votes)}</strong></div>
-        <h3>Результат (метод Борда):</h3>
+        <h3>Результат:</h3>
         <ol>{"".join([f"<li>{g}</li>" for g in borda])}</ol>
-        <p><em>Повний перебір {perms:,} перестановок вимагає значних обчислень. Для демонстрації показано результат методу Борда.</em></p>
         <p><a href="/">← Назад</a> | <a href="/lab3/add">→ Додати голос</a> | <a href="/lab3/ga">→ ГА</a></p>
         '''
         self.send_response(200)
@@ -284,8 +283,8 @@ class handler(BaseHTTPRequestHandler):
         <div class="info">Параметри ГА:<br>Популяція: {POP_SIZE} | Поколінь: {GENERATIONS} | Мутація: {MUT_RATE*100:.0f}%<br>Голосів: <strong>{len(votes)}</strong></div>
         <h3>Результат ГА:</h3>
         <ol>{"".join([f"<li>{g}</li>" for g in ga_result])}</ol>
-        <h3>Порівняння з методом Борда:</h3>
-        <table><thead><tr><th>Ранг</th><th>ГА</th><th>Борда</th><th>Збіг</th></tr></thead><tbody>{comp}</tbody></table>
+        <h3>Порівняння з методом прямого перебору:</h3>
+        <table><thead><tr><th>Ранг</th><th>ГА</th><th>Прямий перебір</th><th>Збіг</th></tr></thead><tbody>{comp}</tbody></table>
         <p><a href="/">← Назад</a> | <a href="/lab3/add">→ Додати голос</a> | <a href="/lab3/brute">← Прямий перебір</a></p>
         '''
         self.send_response(200)
