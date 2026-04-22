@@ -1,10 +1,15 @@
 {
   "version": 2,
+  "builds": [
+    {"src": "api/index.py", "use": "@vercel/python"}
+  ],
   "routes": [
-    { "src": "/", "dest": "/api/index.py" },
-    { "src": "/lab3/add", "dest": "/api/index.py" },
-    { "src": "/lab3/matrix", "dest": "/api/index.py" },
-    { "src": "/lab3/brute", "dest": "/api/index.py" },
-    { "src": "/lab3/ga", "dest": "/api/index.py" }
+    {"src": "/healthz",   "dest": "/api/index.py"},
+    {"src": "/data",      "dest": "/api/index.py"},
+    {"src": "/enumerate", "dest": "/api/index.py"},
+    {"src": "/aco",       "dest": "/api/index.py"},
+    {"src": "/scaling",   "dest": "/api/index.py"},
+    {"src": "/protocol",  "dest": "/api/index.py"},
+    {"src": "/(.*)",      "dest": "/api/index.py"}
   ]
 }
