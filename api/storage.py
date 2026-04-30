@@ -27,7 +27,6 @@ from typing import Any, Dict, List, Optional
 _MEMORY: Dict[str, List[Dict[str, Any]]] = {
     "rankings": [],   # збережені колективні ранжування
     "events":   [],   # системний журнал
-    "aco_runs": [],   # історія прогонів мурашиного алгоритму
 }
 
 # ---------------------------------------------------------------------------
@@ -63,7 +62,7 @@ def _connect():
         )
         # ping — перевіримо, що з'єднання справді працює
         client.admin.command("ping")
-        _db_handle = client["lab3_collective_ranking"]
+        _db_handle = client["lab4_distributed_ranking"]
         return _db_handle
     except Exception as exc:  # pragma: no cover — мережеві помилки
         _db_unavailable_reason = f"{type(exc).__name__}: {exc}"
@@ -131,14 +130,6 @@ def save_ranking(source: str, ranking: List[str], cost: int, max_d: int,
 
 def load_rankings(limit: int = 100) -> List[Dict[str, Any]]:
     return _load("rankings", limit)
-
-
-def save_aco_run(payload: Dict[str, Any]) -> bool:
-    return _save("aco_runs", payload)
-
-
-def load_aco_runs(limit: int = 50) -> List[Dict[str, Any]]:
-    return _load("aco_runs", limit)
 
 
 def log_event(event_type: str, message: str, meta: Optional[Dict] = None) -> bool:

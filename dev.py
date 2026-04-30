@@ -1,5 +1,5 @@
 """
-Локальний запуск лабораторної №3 без Vercel.
+Локальний запуск лабораторної №4 без Vercel.
 
 Використання:
     python dev.py            # http://localhost:8000
@@ -27,7 +27,7 @@ from api.index import handler
 def main():
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
     httpd = HTTPServer(("127.0.0.1", port), handler)
-    print(f"Lab 3 dev server: http://127.0.0.1:{port}")
+    print(f"Lab 4 dev server: http://127.0.0.1:{port}")
     print("Ctrl+C to stop.\n")
     try:
         httpd.serve_forever()

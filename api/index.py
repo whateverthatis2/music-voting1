@@ -1,15 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-Точка входу serverless-функції Vercel.
+Точка входу serverless-функції Vercel — Лабораторна №4.
 
 Маршрути:
-    /            — огляд лабораторної
-    /data        — вхідні дані з Лаб.1-2 + матриці п.1.2 та п.1.3
-    /enumerate   — прямий перебір n! та пошук медіан
-    /aco         — мурашиний алгоритм + порівняння з прямим перебором
-    /scaling     — масштабне дослідження ACO (20/50/100 × 10/20/30)
-    /protocol    — захищений паролем журнал подій
-    /healthz     — JSON для перевірки стану сховища
+    /              — огляд лабораторної та підсумкові показники;
+    /data          — вхідні дані Лаб.1-2 + матриці п.1.2 та п.1.3;
+    /distributed   — схема декомпозиції, розподілений прямий перебір,
+                     порівняння з централізованим (= результат Лаб.3);
+    /satisfaction  — обране A*/R*, відстані d^j, індекси задоволеності s^j;
+    /large         — Ситуація Б (n>>12): випадкові трійки, ГА,
+                     порівняння централізованого vs розподіленого;
+    /protocol      — захищений паролем журнал подій (POST з паролем);
+    /protocol.txt  — текстовий протокол обчислень;
+    /healthz       — JSON для перевірки стану сховища.
 """
 
 from __future__ import annotations
@@ -22,7 +25,7 @@ from . import data as D
 from . import templates as T
 from . import storage as S
 from . import algorithms as A
-from . import aco as ACO
+from . import lab4 as L4
 
 
 # ---------------------------------------------------------------------------
@@ -31,111 +34,125 @@ from . import aco as ACO
 _cache: dict = {}
 
 
-def _enum_results():
-    if "enum" not in _cache:
-        _cache["enum"] = A.enumerate_all(D.OBJECTS, D.EXPERT_TRIPLES, keep_top=10)
-    return _cache["enum"]
+def _centralized():
+    if "cen" not in _cache:
+        _cache["cen"] = L4.centralized_enumerate(D.OBJECTS, D.EXPERT_TRIPLES)
+    return _cache["cen"]
 
 
-def _aco_results():
-    if "aco" not in _cache:
-        res = ACO.ant_colony(D.OBJECTS, D.EXPERT_TRIPLES,
-                             n_ants=30, n_iter=80, seed=2026)
-        _cache["aco"] = res
-        S.save_aco_run({
-            "objects": list(D.OBJECTS),
-            "n_experts": len(D.EXPERT_TRIPLES),
-            "best_ranking": res["best_ranking"],
-            "best_cost": res["best_cost"],
-            "best_max": res["best_max"],
-            "params": res["params"],
-            "elapsed": res["elapsed"],
-        })
-    return _cache["aco"]
+def _distributed():
+    if "dis" not in _cache:
+        res = L4.distributed_enumerate(D.OBJECTS, D.EXPERT_TRIPLES, n_workers=4)
+        _cache["dis"] = res
+        S.save_ranking(
+            source="lab4-distributed",
+            ranking=res["best_sum_rank"],
+            cost=res["best_sum_value"],
+            max_d=res["best_max_value"],
+            method="distributed_brute_force",
+        )
+    return _cache["dis"]
 
 
-def _scaling_results():
-    if "scaling" not in _cache:
-        _cache["scaling"] = ACO.scaling_test()
-    return _cache["scaling"]
+def _chosen_compromise():
+    """Обране A*/R* — за замовчуванням перша Σ-медіана з розподіленого перебору."""
+    if "chosen" not in _cache:
+        dis = _distributed()
+        ranking = dis["best_sum_rank"]
+        rank_vec = A.ranking_to_rank_vector(D.OBJECTS, ranking)
+        _cache["chosen"] = {"ranking": ranking, "rank_vec": rank_vec}
+    return _cache["chosen"]
+
+
+def _satisfactions():
+    if "sat" not in _cache:
+        chosen = _chosen_compromise()
+        rows = L4.compute_satisfactions(
+            D.EXPERTS, D.EXPERT_TRIPLES_LAB1, chosen["ranking"])
+        _cache["sat"] = rows
+    return _cache["sat"]
+
+
+def _ga_suite():
+    if "ga" not in _cache:
+        _cache["ga"] = L4.ga_comparison_suite()
+    return _cache["ga"]
+
+
+def _ga_demo():
+    if "gademo" not in _cache:
+        _cache["gademo"] = L4.single_ga_demo()
+    return _cache["gademo"]
 
 
 # ---------------------------------------------------------------------------
 # Сторінка /
 # ---------------------------------------------------------------------------
 def render_home() -> str:
-    enum = _enum_results()
-    aco_res = _aco_results()
+    cen = _centralized()
+    dis = _distributed()
+    sat = _satisfactions()
+    avg_s = sum(r["s"] for r in sat) / len(sat)
+
+    coincide = (cen["best_sum_rank"] == dis["best_sum_rank"]
+                and cen["best_sum_value"] == dis["best_sum_value"])
 
     body = f"""
 <div class="card">
   <h2>Постановка задачі</h2>
-  <p class="lead">Визначити колективне ранжування об'єктів у розподіленій
-     організаційній системі на основі експертної інформації, зібраної
-     під час Лабораторних робіт №1-2.</p>
+  <p class="lead">Виконати розподілені обчислення компромісних ранжувань
+     об'єктів за результатами преференційного голосування з Лаб.1-2 та
+     обчислити індекси задоволеності експертів колективним розв'язком
+     (Ситуація А, n = {len(D.OBJECTS)}). Додатково — для n ≫ 12 (Ситуація Б)
+     застосувати еволюційний алгоритм у централізованому та розподіленому
+     режимах, оцінити час та якість.</p>
   <div class="grid cols-3">
     {T.stat("Об'єктів (повний набір)",   len(D.FULL_OBJECTS))}
     {T.stat("Об'єктів після евристик",   len(D.OBJECTS))}
     {T.stat("Експертів (з викладачем)",  len(D.EXPERTS))}
-    {T.stat("Перестановок n!",           f"{enum['n_perm']:,}".replace(",", " "))}
-    {T.stat("Медіан мін-сума",           len(enum["all_best_sum"]))}
-    {T.stat("Медіан мін-макс",           len(enum["all_best_max"]))}
+    {T.stat("Перестановок n!",           f"{cen['n_perm']:,}".replace(",", " "))}
+    {T.stat("Σ-медіана", cen["best_sum_value"])}
+    {T.stat("Сер. індекс задоволеності", f"{avg_s:.1f}%")}
   </div>
 </div>
 
 <div class="card">
-  <h2>Колективне ранжування (медіана Кемені — Снела)</h2>
-  <h3>Прямий перебір — мінімум суми відстаней</h3>
-  {T.ranking_chips(enum["best_sum_rank"])}
-  <p class="muted">Сумарна відстань Кука: <span class="kbd">{enum["best_sum_value"]}</span></p>
-
-  <h3>Прямий перебір — мінімум максимуму відстаней</h3>
-  {T.ranking_chips(enum["best_max_rank"])}
-  <p class="muted">Максимальна відстань: <span class="kbd">{enum["best_max_value"]}</span></p>
-
-  <h3>Мурашиний алгоритм (на тих самих даних)</h3>
-  {T.ranking_chips(aco_res["best_ranking"])}
-  <p class="muted">Сума відстаней: <span class="kbd">{aco_res["best_cost"]}</span> ·
-     максимум: <span class="kbd">{aco_res["best_max"]}</span> ·
-     ітерацій: <span class="kbd">{len(aco_res["history"])}</span> ·
-     час: <span class="kbd">{aco_res["elapsed"]}s</span></p>
-  {_aco_match_alert(enum, aco_res)}
+  <h2>Колективне ранжування A*</h2>
+  {T.ranking_chips(dis["best_sum_rank"])}
+  <p class="muted">Σ d (Кук) = <span class="kbd">{dis["best_sum_value"]}</span> ·
+     max d = <span class="kbd">{dis["best_max_value"]}</span></p>
+  {T.alert(_coincidence_alert(coincide, cen, dis), "ok" if coincide else "warn")}
 </div>
 
 <div class="card">
-  <h2>Послідовність виконання</h2>
+  <h2>Послідовність виконання (за PDF)</h2>
   <ol style="margin-left:18px;color:#334155;line-height:1.8">
-    <li>Зчитати множинні порівняння експертів з Лаб.1 та евристики Лаб.2 →
-        <a href="/data">Дані Лаб.1-2</a>.</li>
-    <li>Побудувати матрицю статистики переваг (п.1.2) та розгорнуту матрицю
-        рангів (п.1.3) → <a href="/data#matrix">Матриці</a>.</li>
-    <li>Згенерувати 7! = 5040 перестановок та обчислити відстані Кука
-        (п.2) → <a href="/enumerate">Прямий перебір</a>.</li>
-    <li>Знайти мінімуми суми та максимуму — медіани Кемені — Снела
-        (п.3, п.10).</li>
-    <li>Запустити мурашиний алгоритм та порівняти з еталоном
-        (п.16) → <a href="/aco">Мурашиний алгоритм</a>.</li>
-    <li>Дослідити поведінку ACO для 20/50/100 альтернатив (п.17) →
-        <a href="/scaling">Масштабування</a>.</li>
+    <li>Зчитати дані Лаб.1-2 → <a href="/data">Дані Лаб.1-2</a>.</li>
+    <li>Запропонувати схему декомпозиції перебору та довести повноту →
+        <a href="/distributed">Розподілений перебір</a>.</li>
+    <li>Здійснити розподілений прямий перебір; довести збіг із Лаб.3 →
+        <a href="/distributed">Розподілений перебір</a>.</li>
+    <li>Вибрати A*, обчислити d^j, штраф (n-3) для видалених об'єктів,
+        індекс s^j → <a href="/satisfaction">Індекси задоволеності</a>.</li>
+    <li>Для n ≫ 12 — згенерувати випадкові трійки, запустити ГА
+        централізовано та розподілено →
+        <a href="/large">n ≫ 12 · ГА</a>.</li>
+    <li>Зберегти протокол обчислень →
+        <a href="/protocol">Протокол</a> ·
+        <a href="/protocol.txt">завантажити .txt</a>.</li>
   </ol>
 </div>
 """
     return T.page("Огляд", body, active="home")
 
 
-def _aco_match_alert(enum, aco_res):
-    if aco_res["best_cost"] is None:
-        return T.alert("Мурашиний алгоритм не встиг завершитися.", "warn")
-    if aco_res["best_cost"] == enum["best_sum_value"]:
-        return T.alert(
-            "Мурашиний алгоритм збігся з результатом прямого перебору "
-            f"(сумарна відстань = {enum['best_sum_value']}). "
-            "Це підтверджує коректність обох методів.", "ok")
-    delta = aco_res["best_cost"] - enum["best_sum_value"]
-    return T.alert(
-        f"Мурашиний алгоритм відхилився від прямого перебору на Δ = {delta}. "
-        "Збільшення параметрів n_ants, n_iter або alpha/beta зазвичай усуває розрив.",
-        "warn")
+def _coincidence_alert(ok: bool, cen, dis) -> str:
+    if ok:
+        return ("Розподілений прямий перебір збігся з результатом централізованого "
+                f"перебору (Лаб.3): Σ d = {cen['best_sum_value']}, "
+                "ранжування ідентичне. Декомпозиція коректна.")
+    return ("Розбіжність між розподіленим та централізованим результатами — "
+            "це не повинно статися при коректній декомпозиції; перевірте код.")
 
 
 # ---------------------------------------------------------------------------
@@ -144,22 +161,16 @@ def _aco_match_alert(enum, aco_res):
 def render_data() -> str:
     pmat = A.preference_matrix(D.OBJECTS, D.EXPERT_TRIPLES)
     rmat = A.expanded_rank_matrix(D.OBJECTS, D.EXPERT_TRIPLES)
-    borda = A.borda_score(pmat)
 
-    # 1. Множинні порівняння у вигляді експертів × 3 рядки (як п.1.1)
     triples_rows = []
     for r_idx in range(3):
         triples_rows.append([t[r_idx] for t in D.EXPERT_TRIPLES])
     triple_headers = [str(i + 1) for i in range(len(D.EXPERT_TRIPLES))]
 
-    # 2. Матриця 1.2
     pmat_headers = [f"o{j+1}" for j in range(len(D.OBJECTS))]
     pmat_rows_lbl = ["1-ше місце", "2-ге місце", "3-тє місце", "Σ згадувань"]
-
-    # 3. Матриця 1.3
     rmat_headers = [str(i + 1) for i in range(len(D.EXPERT_TRIPLES))]
 
-    # Список об'єктів та експертів
     obj_chips = "".join(
         f'<span class="rk"><b>o{i+1}</b>{o}</span>'
         for i, o in enumerate(D.OBJECTS)
@@ -168,7 +179,6 @@ def render_data() -> str:
         f'<span class="e">{e}</span>' for e in D.EXPERTS
     )
 
-    # Heuristics
     heur_rows = [
         [h["id"], h["name"], h["votes"], h["rule"]] for h in D.HEURISTICS
     ]
@@ -178,6 +188,18 @@ def render_data() -> str:
          r["left"]]
         for r in D.REMOVED_BY_HEURISTICS
     ]
+
+    # Оригінальні трійки Лаб.1 з підсвіткою видалених евристиками об'єктів
+    objects_set = set(D.OBJECTS)
+    lab1_rows = []
+    for j, (expert, t) in enumerate(zip(D.EXPERTS, D.EXPERT_TRIPLES_LAB1), 1):
+        cells = []
+        for k, obj in enumerate(t):
+            if obj in objects_set:
+                cells.append(obj)
+            else:
+                cells.append(f'<span class="tag red">{obj} ✗</span>')
+        lab1_rows.append([j, expert, *cells])
 
     body = f"""
 <div class="card">
@@ -194,24 +216,31 @@ def render_data() -> str:
 </div>
 
 <div class="card">
-  <h2>3. Множинні порівняння експертів (п.1.1)</h2>
-  <p class="lead">Кожен стовпчик — експерт; рядки — місця 1, 2, 3 у трійці.</p>
-  {T.matrix_table(triple_headers, triples_rows,
-                  row_labels=["1", "2", "3"])}
-</div>
-
-<div class="card" id="matrix">
-  <h2>4. Матриця статистики переваг (п.1.2)</h2>
-  <p class="lead">Скільки експертів поставили об'єкт на позиції 1/2/3
-     та сумарна кількість згадувань.</p>
-  {T.matrix_table(pmat_headers, pmat,
-                  row_labels=pmat_rows_lbl)}
-  <h3>Рейтинг Борда (3·1-ше + 2·2-ге + 1·3-тє)</h3>
-  {T.bar_chart(list(zip(D.OBJECTS, borda)))}
+  <h2>3. Множинні порівняння експертів (звужений набір, n = {len(D.OBJECTS)})</h2>
+  <p class="lead">Кожен стовпчик — експерт; рядки — місця 1, 2, 3 у трійці.
+     Ці трійки використовуються для обчислення компромісного ранжування
+     прямим перебором.</p>
+  {T.matrix_table(triple_headers, triples_rows, row_labels=["1", "2", "3"])}
 </div>
 
 <div class="card">
-  <h2>5. Розгорнута матриця рангів (п.1.3)</h2>
+  <h2>4. Оригінальні трійки Лаб.1 (з можливими видаленими об'єктами)</h2>
+  <p class="lead">Трійки до застосування евристик Лаб.2. Об'єкти,
+     відмічені <span class="tag red">червоним</span>, видалені евристиками
+     і не входять до робочої підмножини. Саме для таких трійок у Лаб.4
+     застосовується штраф d<sup>j</sup> = d<sup>l</sup> + (n-3).</p>
+  {T.table(["#", "Експерт", "1-ше", "2-ге", "3-тє"], lab1_rows)}
+</div>
+
+<div class="card" id="matrix">
+  <h2>5. Матриця статистики переваг (п.1.2)</h2>
+  <p class="lead">Скільки експертів поставили об'єкт на позиції 1/2/3
+     та сумарна кількість згадувань.</p>
+  {T.matrix_table(pmat_headers, pmat, row_labels=pmat_rows_lbl)}
+</div>
+
+<div class="card">
+  <h2>6. Розгорнута матриця рангів (п.1.3)</h2>
   <p class="lead">Рядки — об'єкти; стовпчики — експерти. Значення = ранг
      об'єкта (1, 2, 3) у трійці експерта; 0 — не названо.</p>
   {T.matrix_table(rmat_headers, rmat,
@@ -219,217 +248,342 @@ def render_data() -> str:
 </div>
 
 <div class="card">
-  <h2>6. Евристики звуження (Лаб.2)</h2>
+  <h2>7. Евристики звуження (Лаб.2)</h2>
   {T.table(["ID", "Назва", "Голоси", "Правило"], heur_rows)}
   <h3>Хід застосування евристик</h3>
   {T.table(["Крок", "Евристика", "Прибрано", "Залишилось"], removed_rows)}
 </div>
 """
-    return T.page("Дані", body, active="data")
+    return T.page("Дані Лаб.1-2", body, active="data")
 
 
 # ---------------------------------------------------------------------------
-# Сторінка /enumerate
+# Сторінка /distributed
 # ---------------------------------------------------------------------------
-def render_enumerate() -> str:
-    enum = _enum_results()
+def render_distributed() -> str:
+    cen = _centralized()
+    dis = _distributed()
 
-    # Демонстраційна таблиця (п.9)
-    sample_headers = ["#", "Перестановка", "Σ d", "max d",
-                      *[f"e{i+1}" for i in range(min(8, len(D.EXPERT_TRIPLES)))]]
-    sample_rows = []
-    for k, sp in enumerate(enum["sample_perms"], 1):
-        ranking_str = " › ".join(sp["ranking"])
-        cells = [k, ranking_str, sp["sum"], sp["max"],
-                 *sp["dists"][:8]]
-        sample_rows.append(cells)
+    coincide = (cen["best_sum_rank"] == dis["best_sum_rank"]
+                and cen["best_sum_value"] == dis["best_sum_value"])
 
-    # Топ-10 по сумі та по максимуму
-    top_sum_rows = [
-        [i + 1, " › ".join(r), s, m]
-        for i, (s, m, r) in enumerate(enum["top_sum"])
-    ]
-    top_max_rows = [
-        [i + 1, " › ".join(r), s, m]
-        for i, (s, m, r) in enumerate(enum["top_max"])
+    branches_rows = [
+        [b["first"], b["count"],
+         b["best_sum"], " › ".join(b["all_best_sum"][0]),
+         b["best_max"], " › ".join(b["all_best_max"][0])]
+        for b in dis["branches"]
     ]
 
-    # Відновлення з вектора рангів (п.11)
-    rank_vec = A.ranking_to_rank_vector(D.OBJECTS, enum["best_sum_rank"])
-    recovered = A.recover_ranking_from_ranks(D.OBJECTS, rank_vec)
+    speedup_real = round(cen["elapsed"] / max(dis["elapsed"], 0.0001), 2)
+    speedup_ideal = dis["n_workers"]
 
-    # Альтернативні медіани
-    alt_sum_html = ""
-    if len(enum["all_best_sum"]) > 1:
-        alt_sum_html = "<h3>Інші перестановки з тим самим Σ</h3>" + "".join(
-            f'<div style="margin:6px 0">{T.ranking_chips(r)}</div>'
-            for r in enum["all_best_sum"][1:6]
-        )
-    alt_max_html = ""
-    if len(enum["all_best_max"]) > 1:
-        alt_max_html = (
-            f'<p class="muted">Усього перестановок з тим же максимумом: '
-            f'<b>{len(enum["all_best_max"])}</b></p>')
+    n = len(D.OBJECTS)
+    n_minus_1_fact = L4._factorial(n - 1)
 
     body = f"""
 <div class="card">
-  <h2>Прямий перебір {len(D.OBJECTS)}! = {enum["n_perm"]:,} перестановок</h2>
-  <p class="lead">Для кожної перестановки об'єктів обчислюється відстань Кука
-     до трійки кожного з {len(D.EXPERT_TRIPLES)} експертів за евристикою E1
-     (поміркованої взаємності). Далі знаходимо суму та максимум по експертах.</p>
-  <div class="kpi">
-    <div class="item"><div class="l">Σ-медіана</div><div class="v">{enum["best_sum_value"]}</div></div>
-    <div class="item"><div class="l">max-медіана</div><div class="v">{enum["best_max_value"]}</div></div>
-    <div class="item"><div class="l">Кількість Σ-медіан</div><div class="v">{len(enum["all_best_sum"])}</div></div>
-    <div class="item"><div class="l">Кількість max-медіан</div><div class="v">{len(enum["all_best_max"])}</div></div>
-  </div>
-</div>
+  <h2>1. Схема декомпозиції прямого перебору</h2>
+  <p class="lead">Декомпозиція за фіксованим першим об'єктом: для кожного
+     з n = {n} об'єктів утворюється окрема гілка перебору, в якій цей об'єкт
+     стоїть на 1-й позиції, а решта (n−1) = {n - 1} об'єктів переставляються
+     всіма можливими способами. Гілки виконуються паралельно
+     (ThreadPoolExecutor, {dis["n_workers"]} потоків — по числу віртуальних
+     "вузлів" розподіленої системи).</p>
 
-<div class="card">
-  <h2>Медіана Кемені — мінімум суми відстаней</h2>
-  {T.ranking_chips(enum["best_sum_rank"])}
-  <p class="muted">Σ d = <span class="kbd">{enum["best_sum_value"]}</span></p>
-  {alt_sum_html}
-</div>
+  <h3>Доведення повноти декомпозиції</h3>
+  <p>Нехай π — будь-яка перестановка множини об'єктів {{o₁, …, oₙ}}, n = {n}.
+     Розглянемо її перший елемент π(1) = oᵢ. Така перестановка належить
+     рівно гілці i (бо тільки в цій гілці перший елемент дорівнює oᵢ),
+     а її «хвіст» π(2..n) є деякою перестановкою решти n−1 об'єктів —
+     отже, вона генерується всередині гілки. Звідси:</p>
+  <div class="code-block">|Гілка_i| = (n−1)! = {n_minus_1_fact}
+Σ |Гілка_i| = n · (n−1)! = n! = {cen["n_perm"]}
+Гілки попарно не перетинаються (різний π(1)).</div>
+  <p>Отже, об'єднання гілок дає повну множину з n! перестановок без повторів.</p>
 
-<div class="card">
-  <h2>Мінімаксна медіана — мінімум максимуму</h2>
-  {T.ranking_chips(enum["best_max_rank"])}
-  <p class="muted">max d = <span class="kbd">{enum["best_max_value"]}</span></p>
-  {alt_max_html}
-</div>
-
-<div class="card">
-  <h2>Демонстрація обчислень (п.9 завдання)</h2>
-  <p class="lead">Перевірка коректності алгоритму на кількох обраних
-     перестановках. Колонки e₁…e₈ — відстані до перших восьми експертів.</p>
-  {T.table(sample_headers, sample_rows)}
-</div>
-
-<div class="card">
-  <h2>Топ-10 перестановок за сумою відстаней</h2>
-  {T.table(["#", "Ранжування", "Σ d", "max d"], top_sum_rows)}
-  <h3>Топ-10 перестановок за максимумом</h3>
-  {T.table(["#", "Ранжування", "Σ d", "max d"], top_max_rows)}
-</div>
-
-<div class="card">
-  <h2>Відновлення ранжування з вектора рангів (п.11)</h2>
-  <p class="lead">Для медіани Σ обчислимо вектор рангів об'єктів у вихідному
-     порядку <span class="kbd">{", ".join(D.OBJECTS)}</span> та відновимо
-     з нього ранжування (зворотна операція).</p>
-  {T.table(
-      ["Об'єкт", *D.OBJECTS],
-      [["Ранг у медіані", *rank_vec]]
-  )}
-  <p class="muted">Відновлене ранжування:</p>
-  {T.ranking_chips(recovered)}
-</div>
-"""
-    return T.page("Прямий перебір", body, active="enumerate")
-
-
-# ---------------------------------------------------------------------------
-# Сторінка /aco
-# ---------------------------------------------------------------------------
-def render_aco() -> str:
-    enum = _enum_results()
-    aco_res = _aco_results()
-
-    history = aco_res["history"]
-    chart_items = [
-        (str(i + 1) if i in (0, len(history) // 2, len(history) - 1) else "",
-         h)
-        for i, h in enumerate(history)
-    ]
-
-    delta = (aco_res["best_cost"] - enum["best_sum_value"]
-             if aco_res["best_cost"] is not None else None)
-    match_pct = (100.0 * sum(1 for a, b in zip(
-        aco_res["best_ranking"], enum["best_sum_rank"]) if a == b)
-        / max(1, len(D.OBJECTS)))
-
-    body = f"""
-<div class="card">
-  <h2>Прогін на робочих даних (n = {len(D.OBJECTS)})</h2>
+  <h3>Фактично оброблено перестановок</h3>
   <div class="grid cols-3">
-    {T.stat("Сумарна відстань Σ d", aco_res["best_cost"])}
-    {T.stat("Максимальна відстань",  aco_res["best_max"])}
-    {T.stat("Час, секунди",          aco_res["elapsed"])}
+    {T.stat("Очікувано n!",   dis["n_factorial_expected"])}
+    {T.stat("Перебрано",      dis["n_perm_total"])}
+    {T.stat("Гілок",          len(dis["branches"]))}
   </div>
-  <h3>Знайдене ранжування</h3>
-  {T.ranking_chips(aco_res["best_ranking"])}
-  <p class="note">Параметри: α = {aco_res["params"]["alpha"]},
-     β = {aco_res["params"]["beta"]}, ρ = {aco_res["params"]["rho"]},
-     n_ants = {aco_res["params"]["n_ants"]},
-     n_iter = {aco_res["params"]["n_iter"]}.</p>
 </div>
 
 <div class="card">
-  <h2>Порівняння з прямим перебором (п.16 завдання)</h2>
+  <h2>2. Результат розподіленого перебору по гілках</h2>
+  <p class="lead">Кожен рядок — одна гілка декомпозиції. У кожній гілці
+     знайдено локальні Σ- та max-медіани; глобальна медіана — мінімум по
+     всіх гілках.</p>
   {T.table(
-      ["Метрика", "Прямий перебір", "Мурашиний алгоритм"],
+      ["Фікс. 1-й об'єкт", "(n-1)!", "Лок. min Σ d", "Лок. Σ-ранжування",
+       "Лок. min max", "Лок. max-ранжування"],
+      branches_rows
+  )}
+
+  <h3>Глобальне Σ-медіанне ранжування</h3>
+  {T.ranking_chips(dis["best_sum_rank"])}
+  <p class="muted">Σ d = <span class="kbd">{dis["best_sum_value"]}</span></p>
+
+  <h3>Глобальне max-медіанне ранжування</h3>
+  {T.ranking_chips(dis["best_max_rank"])}
+  <p class="muted">max d = <span class="kbd">{dis["best_max_value"]}</span></p>
+
+  {_alt_medians_html(dis)}
+</div>
+
+<div class="card">
+  <h2>3. Порівняння з результатом Лаб.3 (централізований перебір)</h2>
+  {T.table(
+      ["Метрика", "Централізований (Лаб.3)", "Розподілений (Лаб.4)"],
       [
-        ["Σ d (ціль)",     enum["best_sum_value"], aco_res["best_cost"]],
-        ["max d",          enum["best_max_value"], aco_res["best_max"]],
-        ["Збіг рангів, %", "100.00",
-         f"{match_pct:.2f}"],
-        ["Час, с",         "≤ 1.0",                aco_res["elapsed"]],
+        ["Σ d (мінімум)",       cen["best_sum_value"], dis["best_sum_value"]],
+        ["max d (мінімум)",     cen["best_max_value"], dis["best_max_value"]],
+        ["Σ-ранжування",
+         " › ".join(cen["best_sum_rank"]),
+         " › ".join(dis["best_sum_rank"])],
+        ["Перестановок",        cen["n_perm"],         dis["n_perm_total"]],
+        ["Час, секунди",        cen["elapsed"],        dis["elapsed"]],
       ]
   )}
-  {T.alert(_aco_match_text(delta), "ok" if delta == 0 else "warn")}
-  <h3>Збіжність по ітераціях</h3>
-  {T.bar_chart([(f"i{i+1}", h) for i, h in enumerate(history[:30])],
-               maximum=max(history) if history else 1)}
-  <p class="note">Показано перші 30 ітерацій (всього {len(history)}).</p>
+  {T.alert(_coincidence_alert(coincide, cen, dis), "ok" if coincide else "warn")}
+</div>
+
+<div class="card">
+  <h2>4. Аналіз часу обчислень</h2>
+  <p class="lead">Реальний speedup на Vercel обмежений GIL (Python-потоки
+     серіалізують CPU-навантаження); відображено фактичний час та
+     теоретичну верхню межу T_центр / W при ідеальному розпаралелюванні.</p>
+  <div class="grid cols-3">
+    {T.stat("T централіз., с",    cen["elapsed"])}
+    {T.stat("T розподіл., с",     dis["elapsed"])}
+    {T.stat("Speedup фактичний",  f"×{speedup_real}")}
+    {T.stat("Speedup ідеальний",  f"×{speedup_ideal}")}
+    {T.stat("Воркерів W",         dis["n_workers"])}
+    {T.stat("T ідеал., с",        round(cen["elapsed"] / speedup_ideal, 4))}
+  </div>
+  <p class="note">На реальній розподіленій системі (окремі процеси/машини)
+     speedup наближається до W; на serverless-Python з GIL — нижчий.</p>
 </div>
 """
-    return T.page("Мурашиний алгоритм", body, active="aco")
+    return T.page("Розподілений перебір", body, active="distributed")
 
 
-def _aco_match_text(delta) -> str:
-    if delta is None:
-        return "Алгоритм не завершився за відведений час."
-    if delta == 0:
-        return ("Мурашиний алгоритм точно збігся з оптимумом, знайденим прямим "
-                "перебором — медіана Кемені відтворена.")
-    return (f"Мурашиний алгоритм відстає від еталону на Δ = {delta}. "
-            "Збільшення параметрів покращить результат.")
+def _alt_medians_html(dis) -> str:
+    if len(dis["all_best_sum"]) <= 1:
+        return ""
+    extras = "".join(
+        f'<div style="margin:6px 0">{T.ranking_chips(r)}</div>'
+        for r in dis["all_best_sum"][1:6]
+    )
+    more = (f'<p class="muted">Усього перестановок з Σ d = {dis["best_sum_value"]}: '
+            f'<b>{len(dis["all_best_sum"])}</b></p>')
+    return f"<h3>Альтернативні Σ-медіани</h3>{extras}{more}"
 
 
 # ---------------------------------------------------------------------------
-# Сторінка /scaling
+# Сторінка /satisfaction
 # ---------------------------------------------------------------------------
-def render_scaling() -> str:
-    rows = _scaling_results()
-    table_rows = [
-        [r["n_alt"], r["n_exp"], r["n_ants"], r["n_iter"],
-         r["best_cost"], r["best_max"],
-         f"{r['elapsed']}s", r["iterations_done"]]
-        for r in rows
-    ]
+def render_satisfaction() -> str:
+    chosen = _chosen_compromise()
+    sat = _satisfactions()
+    n = len(chosen["ranking"])
+    max_d = 3 * (n - 3)
+
+    avg_s = sum(r["s"] for r in sat) / len(sat)
+    min_s = min(r["s"] for r in sat)
+    max_s = max(r["s"] for r in sat)
+    n_penalty = sum(1 for r in sat if r["removed"])
+
+    rows = []
+    for j, r in enumerate(sat, 1):
+        triple_str = " › ".join(
+            f'<span class="tag red">{o}</span>' if o in r["removed"]
+            else o for o in r["triple"]
+        )
+        removed_str = (", ".join(r["removed"]) if r["removed"]
+                       else '<span class="muted">—</span>')
+        rows.append([
+            j, r["expert"], triple_str, removed_str,
+            r["d_partial"], r["d"],
+            f'<b>{r["s"]:.2f}%</b>',
+        ])
+
+    rank_vec_table = T.table(
+        ["Об'єкт", *D.OBJECTS],
+        [["Ранг у A*", *chosen["rank_vec"]]]
+    )
+
+    bar = T.bar_chart(
+        [(r["expert"].replace("Експерт_", "Е"), r["s"]) for r in sat],
+        maximum=100,
+    )
+
     body = f"""
 <div class="card">
-  <h2>Масштабне дослідження ACO (п.17 завдання)</h2>
-  <p class="lead">Прогін мурашиного алгоритму на синтетичних даних
-     для 20, 50, 100 альтернатив × 10, 20, 30 експертів. Кожен експерт —
-     випадкова трійка з повного набору об'єктів.</p>
+  <h2>1. Обране компромісне ранжування A* / R*</h2>
+  <p class="lead">З множини Σ-медіан вибрано перше ранжування, повернене
+     розподіленим перебором (відповідає п.7 завдання — «довільне за власним
+     рішенням»). При наявності кількох еквівалентних медіан можна обрати
+     будь-яку з них без зміни сумарної якості.</p>
+  <h3>Вектор номерів об'єктів A*</h3>
+  {T.ranking_chips(chosen["ranking"])}
+  <h3>Вектор рангів R* (у вихідному порядку об'єктів)</h3>
+  {rank_vec_table}
+</div>
+
+<div class="card">
+  <h2>2. Формули обчислення (п.8-10 завдання)</h2>
+  <div class="code-block">d^j = |r^j_i1 − r*_i1| + |r^j_i2 − r*_i2| + |r^j_i3 − r*_i3|
+якщо в трійці експерта j є об'єкт, видалений евристиками Лаб.2:
+    d^j = d^l + (n − 3),         де d^l — d по решті об'єктів трійки
+s^j = (1 − d^j / ((n − 3) · 3)) · 100 %</div>
+  <p class="muted">У нашому випадку n = {n}, отже max d^j = 3·(n−3) = {max_d}.</p>
+</div>
+
+<div class="card">
+  <h2>3. Відстані та індекси задоволеності експертів</h2>
+  <p class="lead">d_part — внесок об'єктів, що залишились після евристик;
+     d — повна відстань зі штрафом (n−3) за видалені об'єкти.</p>
   {T.table(
-      ["Альтернатив", "Експертів", "n_ants", "n_iter",
-       "Σ d", "max d", "Час", "Виконано ітерацій"],
-      table_rows
+      ["#", "Експерт", "Трійка Лаб.1", "Видалено", "d_part", "d", "s, %"],
+      rows
   )}
 </div>
 
 <div class="card">
-  <h2>Інтерпретація</h2>
-  <p>Час роботи ACO росте як n² (помножено на кількість мурашок та ітерацій),
-     а прямий перебір — як n!. Вже при n = 13 перебір дав би понад мільярд
-     варіантів, тож він непридатний для інтерактивної відповіді. ACO ж
-     справляється з n до 100–200.</p>
+  <h2>4. Підсумкові показники задоволеності</h2>
+  <div class="grid cols-3">
+    {T.stat("Середній індекс s", f"{avg_s:.2f}%")}
+    {T.stat("Мінімальний s",     f"{min_s:.2f}%")}
+    {T.stat("Максимальний s",    f"{max_s:.2f}%")}
+    {T.stat("Експертів зі штрафом", n_penalty)}
+    {T.stat("Експертів без втрат",   len(sat) - n_penalty)}
+    {T.stat("Експертів усього",      len(sat))}
+  </div>
+  <h3>Розподіл індексів по експертах</h3>
+  {bar}
 </div>
 """
-    return T.page("Масштабування", body, active="scaling")
+    return T.page("Індекси задоволеності", body, active="satisfaction")
+
+
+# ---------------------------------------------------------------------------
+# Сторінка /large
+# ---------------------------------------------------------------------------
+def render_large() -> str:
+    suite = _ga_suite()
+    demo = _ga_demo()
+
+    suite_rows = [
+        [r["n_alt"], r["n_exp"],
+         f'{r["pop_total"]}/{r["n_gen"]}',
+         r["centralized_cost"], f'{r["centralized_time"]}s',
+         r["distributed_cost"], f'{r["distributed_time"]}s',
+         r["improvement"], f'{r["improvement_pct"]}%']
+        for r in suite
+    ]
+
+    demo_triples_rows = [
+        [k + 1, *t] for k, t in enumerate(demo["triples_preview"])
+    ]
+
+    cen = demo["centralized"]
+    dis = demo["distributed"]
+    cen_history = cen["history"]
+    dis_history = dis["history"]
+
+    cen_chart = T.bar_chart(
+        [(str(i), v) for i, v in enumerate(cen_history)
+         if i % max(1, len(cen_history) // 20) == 0],
+        maximum=max(cen_history) if cen_history else 1,
+    )
+    dis_chart = T.bar_chart(
+        [(f"e{i}", v) for i, v in enumerate(dis_history)],
+        maximum=max(dis_history) if dis_history else 1,
+    )
+
+    avg_improvement = sum(r["improvement"] for r in suite) / len(suite)
+    avg_improvement_pct = sum(r["improvement_pct"] for r in suite) / len(suite)
+
+    body = f"""
+<div class="card">
+  <h2>1. Схема розподіленого ГА для n ≫ 12</h2>
+  <p class="lead">При n &gt; 12 прямий перебір n! стає непридатним
+     (13! ≈ 6.2·10⁹). Для пошуку компромісу застосовуємо генетичний алгоритм:
+     PMX-кросовер, swap-мутація, турнірний відбір. У розподіленому варіанті
+     використовується <b>острівна модель</b>: K = 4 незалежні популяції,
+     кожна еволюціонує паралельно у власному потоці; між епохами найкращий
+     індивід острова мігрує по кільцю на сусідній острів і витісняє там
+     найгіршого.</p>
+  <div class="code-block">Централізований ГА:    1 популяція × pop_total × n_gen поколінь
+Розподілений ГА:        K=4 острови × (pop_total/4) × n_gen, міграція раз на епоху
+Однакова сумарна обчислювальна робота → чесне порівняння якості</div>
+</div>
+
+<div class="card">
+  <h2>2. Згенеровані випадкові трійки (приклад)</h2>
+  <p class="lead">Демонстраційна задача: n = {demo["n_alt"]} альтернатив,
+     n_exp = {demo["n_exp"]} експертів. Об'єкти позначаються o001…o{demo["n_alt"]:03d};
+     кожна трійка — випадкова вибірка 3 об'єктів зі збереженням порядку
+     (1-ше / 2-ге / 3-тє місце).</p>
+  <p class="muted">Перші 10 об'єктів: {", ".join(demo["objects_preview"])}…</p>
+  {T.table(["#", "1-ше", "2-ге", "3-тє"], demo_triples_rows)}
+  <p class="note">Далі показано 8 з {demo["n_exp"]} згенерованих трійок.</p>
+</div>
+
+<div class="card">
+  <h2>3. Прогін на демонстраційній задачі</h2>
+  {T.table(
+      ["Алгоритм", "Σ d (best)", "Час, с", "Параметри"],
+      [
+        ["Централізований ГА",
+         cen["best_cost"], cen["elapsed"],
+         f'pop = {cen["params"]["pop_size"]}, gen = {cen["params"]["n_gen"]}'],
+        ["Розподілений ГА (4 острови)",
+         dis["best_cost"], dis["elapsed"],
+         f'pop_island = {dis["params"]["pop_per_island"]}, '
+         f'gen = {dis["params"]["n_gen"]}, '
+         f'epochs = {dis["params"]["n_epochs"]}'],
+      ]
+  )}
+  <h3>Збіжність централізованого ГА</h3>
+  {cen_chart}
+  <h3>Збіжність розподіленого ГА (по епохах)</h3>
+  {dis_chart}
+</div>
+
+<div class="card">
+  <h2>4. Порівняльна таблиця для сітки задач</h2>
+  <p class="lead">Сітка n_alt × n_exp = {{20, 50, 100}} × {{10, 20, 30}}.
+     Параметри ГА (pop_total / n_gen) підібрано так, щоб централізований
+     і розподілений варіанти мали однакову обчислювальну роботу.</p>
+  {T.table(
+      ["n_alt", "n_exp", "pop/gen",
+       "Σ d центр.", "T центр.",
+       "Σ d розпод.", "T розпод.",
+       "Δ якості", "Покращення %"],
+      suite_rows
+  )}
+</div>
+
+<div class="card">
+  <h2>5. Висновки за п.14-15 завдання</h2>
+  <ul style="margin-left:18px;color:#334155;line-height:1.8">
+    <li>Середнє покращення розв'язку острівним ГА відносно централізованого
+        ГА (за {len(suite)} прогонами): <b>Δ = {avg_improvement:+.2f}</b>
+        (<b>{avg_improvement_pct:+.2f}%</b>).</li>
+    <li>Острівна модель краща за централізовану з тим самим бюджетом
+        обчислень тому, що зберігає більше різноманіття популяції —
+        острови сходяться до різних локальних оптимумів, а міграція
+        переносить найкращих між островами.</li>
+    <li>На Vercel реальний speedup за часом обмежений GIL Python — потоки
+        серіалізують CPU-операції. На системі з окремими процесами / вузлами
+        прискорення прямо пропорційне числу вузлів (близько ×K = 4 для
+        нашої схеми).</li>
+  </ul>
+</div>
+"""
+    return T.page("n ≫ 12 · ГА", body, active="large")
 
 
 # ---------------------------------------------------------------------------
@@ -439,9 +593,10 @@ def render_protocol_form(error: str = "") -> str:
     err_html = T.alert(error, "error") if error else ""
     body = f"""
 <div class="card">
-  <h2>Конфіденційний протокол</h2>
-  <p class="lead">Перегляд журналу подій, ранжувань та прогонів
-     мурашиного алгоритму захищено паролем.</p>
+  <h2>Конфіденційний протокол обчислень</h2>
+  <p class="lead">Перегляд журналу подій, збережених ранжувань та результатів
+     розподіленого перебору захищено паролем. Текстову версію протоколу
+     можна завантажити одразу: <a href="/protocol.txt">protocol.txt</a>.</p>
   {err_html}
   <form method="POST" action="/protocol" class="inline">
     <input type="password" name="password" placeholder="Пароль" required>
@@ -454,7 +609,6 @@ def render_protocol_form(error: str = "") -> str:
 
 def render_protocol_view() -> str:
     rankings = S.load_rankings(50)
-    aco_runs = S.load_aco_runs(20)
     events = S.load_events(50)
     status = S.db_status()
 
@@ -474,16 +628,6 @@ def render_protocol_view() -> str:
         for r in rankings
     ] or [["—", "—", "—", "—", "—", "—"]]
 
-    aco_rows = [
-        [r.get("time", "")[:19],
-         r.get("n_experts", ""),
-         r.get("best_cost", ""),
-         r.get("best_max", ""),
-         f"{r.get('elapsed', '')}s",
-         " › ".join(r.get("best_ranking", []))]
-        for r in aco_runs
-    ] or [["—", "—", "—", "—", "—", "—"]]
-
     ev_rows = [
         [e.get("time", "")[:19], e.get("type", ""), e.get("message", "")]
         for e in events
@@ -493,17 +637,12 @@ def render_protocol_view() -> str:
 <div class="card">
   <h2>Стан сховища</h2>
   {status_alert}
+  <p><a class="btn secondary" href="/protocol.txt">Завантажити .txt</a></p>
 </div>
 
 <div class="card">
   <h2>Збережені колективні ранжування</h2>
   {T.table(["Час", "Джерело", "Метод", "Σ d", "max d", "Ранжування"], rk_rows)}
-</div>
-
-<div class="card">
-  <h2>Прогони мурашиного алгоритму</h2>
-  {T.table(["Час", "Експертів", "Σ d", "max d", "Час прогону", "Найкраще ранжування"],
-           aco_rows)}
 </div>
 
 <div class="card">
@@ -515,6 +654,107 @@ def render_protocol_view() -> str:
 
 
 # ---------------------------------------------------------------------------
+# Текстовий протокол /protocol.txt
+# ---------------------------------------------------------------------------
+def render_protocol_txt() -> str:
+    cen = _centralized()
+    dis = _distributed()
+    chosen = _chosen_compromise()
+    sat = _satisfactions()
+    suite = _ga_suite()
+
+    n = len(D.OBJECTS)
+    out: list[str] = []
+    P = out.append
+
+    P("=" * 78)
+    P("ПРОТОКОЛ ЛАБОРАТОРНОЇ РОБОТИ №4")
+    P("Розподілені обчислення компромісних ранжувань та визначення")
+    P("індексів задоволеності експертів колективним розв'язком")
+    P("=" * 78)
+    P("")
+    P("1. ВХІДНІ ДАНІ (Лаб.1-2)")
+    P("-" * 78)
+    P(f"Повний набір ({len(D.FULL_OBJECTS)} жанрів): {', '.join(D.FULL_OBJECTS)}")
+    P(f"Робоча підмножина (n = {n}): {', '.join(D.OBJECTS)}")
+    P(f"Кількість експертів: {len(D.EXPERTS)} (20 студентів + Викладач)")
+    P("")
+    P("Звужені трійки (для перебору):")
+    for j, (e, t) in enumerate(zip(D.EXPERTS, D.EXPERT_TRIPLES), 1):
+        P(f"  {j:>2} {e:<14} → {t[0]} > {t[1]} > {t[2]}")
+    P("")
+    P("Оригінальні трійки Лаб.1 (з можливими видаленими об'єктами):")
+    objs = set(D.OBJECTS)
+    for j, (e, t) in enumerate(zip(D.EXPERTS, D.EXPERT_TRIPLES_LAB1), 1):
+        marks = ["[видалено]" if o not in objs else "" for o in t]
+        P(f"  {j:>2} {e:<14} → {t[0]}{marks[0]} > {t[1]}{marks[1]} > {t[2]}{marks[2]}")
+    P("")
+
+    P("2. СХЕМА ДЕКОМПОЗИЦІЇ ПЕРЕБОРУ")
+    P("-" * 78)
+    P(f"n = {n}, n гілок з фіксованим першим об'єктом, кожна (n-1)! = "
+      f"{L4._factorial(n - 1)} перестановок.")
+    P(f"Σ |Гілка_i| = n · (n-1)! = n! = {cen['n_perm']}  (повне покриття).")
+    P("")
+
+    P("3. РЕЗУЛЬТАТИ ПЕРЕБОРУ")
+    P("-" * 78)
+    P(f"Централізований: Σ d = {cen['best_sum_value']}, "
+      f"max d = {cen['best_max_value']}, час = {cen['elapsed']}s")
+    P(f"  ранжування: {' > '.join(cen['best_sum_rank'])}")
+    P(f"Розподілений ({dis['n_workers']} воркерів): "
+      f"Σ d = {dis['best_sum_value']}, max d = {dis['best_max_value']}, "
+      f"час = {dis['elapsed']}s")
+    P(f"  ранжування: {' > '.join(dis['best_sum_rank'])}")
+    P(f"Збіг із Лаб.3: {'ТАК' if cen['best_sum_value'] == dis['best_sum_value'] else 'НІ'}")
+    P("")
+    P("Гілки розподіленого перебору:")
+    for b in dis["branches"]:
+        P(f"  fix={b['first']:<12} count={b['count']:>4}  "
+          f"локальний Σ_min={b['best_sum']}, max_min={b['best_max']}")
+    P("")
+
+    P("4. ОБРАНЕ КОМПРОМІСНЕ РАНЖУВАННЯ A*")
+    P("-" * 78)
+    P("A* (порядок об'єктів): " + " > ".join(chosen["ranking"]))
+    P("R* (вектор рангів):    " + ", ".join(
+        f"{o}={r}" for o, r in zip(D.OBJECTS, chosen["rank_vec"])))
+    P("")
+
+    P("5. ВІДСТАНІ ТА ІНДЕКСИ ЗАДОВОЛЕНОСТІ")
+    P("-" * 78)
+    P(f"max d = 3·(n-3) = {3 * (n - 3)}")
+    P(f"{'#':>3}  {'Експерт':<14} {'d_part':>6} {'d':>4} {'s, %':>7}  Трійка / видалено")
+    for j, r in enumerate(sat, 1):
+        rem = ('видалено: ' + ', '.join(r['removed'])) if r['removed'] else ''
+        P(f"{j:>3}  {r['expert']:<14} {r['d_partial']:>6} {r['d']:>4} "
+          f"{r['s']:>7.2f}  {' > '.join(r['triple'])}  {rem}")
+    avg = sum(x["s"] for x in sat) / len(sat)
+    P(f"\nСередній індекс задоволеності: {avg:.2f}%")
+    P("")
+
+    P("6. СИТУАЦІЯ Б — ГЕНЕТИЧНИЙ АЛГОРИТМ ДЛЯ n >> 12")
+    P("-" * 78)
+    P(f"{'n_alt':>5} {'n_exp':>5} {'pop/gen':>8} "
+      f"{'Σ_центр':>8} {'T_ц,с':>6} {'Σ_розп':>7} {'T_р,с':>6} "
+      f"{'Δ':>4} {'Δ%':>7}")
+    for r in suite:
+        P(f"{r['n_alt']:>5} {r['n_exp']:>5} "
+          f"{r['pop_total']}/{r['n_gen']:<6} "
+          f"{r['centralized_cost']:>8} {r['centralized_time']:>6} "
+          f"{r['distributed_cost']:>7} {r['distributed_time']:>6} "
+          f"{r['improvement']:>+4} {r['improvement_pct']:>+7.2f}")
+    P("")
+    avg_imp = sum(r["improvement_pct"] for r in suite) / len(suite)
+    P(f"Середнє покращення розподіленого ГА відносно централізованого: "
+      f"{avg_imp:+.2f}%")
+    P("")
+    P("=" * 78)
+    P("Кінець протоколу.")
+    return "\n".join(out)
+
+
+# ---------------------------------------------------------------------------
 # Допоміжні функції відповіді
 # ---------------------------------------------------------------------------
 def _send_html(handler: BaseHTTPRequestHandler, html: str, status: int = 200):
@@ -523,6 +763,18 @@ def _send_html(handler: BaseHTTPRequestHandler, html: str, status: int = 200):
     handler.send_header("Content-Type", "text/html; charset=utf-8")
     handler.send_header("Content-Length", str(len(body)))
     handler.send_header("Cache-Control", "no-store")
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+def _send_text(handler: BaseHTTPRequestHandler, text: str,
+               filename: str = "protocol.txt", status: int = 200):
+    body = text.encode("utf-8")
+    handler.send_response(status)
+    handler.send_header("Content-Type", "text/plain; charset=utf-8")
+    handler.send_header("Content-Disposition",
+                        f'attachment; filename="{filename}"')
+    handler.send_header("Content-Length", str(len(body)))
     handler.end_headers()
     handler.wfile.write(body)
 
@@ -552,25 +804,26 @@ def _error_page(message: str) -> str:
 # ---------------------------------------------------------------------------
 class handler(BaseHTTPRequestHandler):
 
-    # Vercel сам логує — придушимо stderr-шум
     def log_message(self, *_):  # noqa: D401
         return
 
-    def do_GET(self):  # noqa: N802 (потрібно саме `do_GET`)
+    def do_GET(self):  # noqa: N802
         path = urlparse(self.path).path
         try:
             if path in ("", "/"):
                 _send_html(self, render_home()); return
             if path == "/data":
                 _send_html(self, render_data()); return
-            if path == "/enumerate":
-                _send_html(self, render_enumerate()); return
-            if path == "/aco":
-                _send_html(self, render_aco()); return
-            if path == "/scaling":
-                _send_html(self, render_scaling()); return
+            if path == "/distributed":
+                _send_html(self, render_distributed()); return
+            if path == "/satisfaction":
+                _send_html(self, render_satisfaction()); return
+            if path == "/large":
+                _send_html(self, render_large()); return
             if path == "/protocol":
                 _send_html(self, render_protocol_form()); return
+            if path == "/protocol.txt":
+                _send_text(self, render_protocol_txt()); return
             if path == "/healthz":
                 _send_json(self, {
                     "ok": True,

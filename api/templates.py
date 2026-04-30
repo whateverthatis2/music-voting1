@@ -117,12 +117,12 @@ form.inline{display:flex;gap:8px;align-items:center}
 # ---------------------------------------------------------------------------
 def page(title: str, body: str, active: str = "") -> str:
     tabs = [
-        ("home",       "/",          "Огляд"),
-        ("data",       "/data",      "Дані Лаб.1-2"),
-        ("enumerate",  "/enumerate", "Прямий перебір"),
-        ("aco",        "/aco",       "Мурашиний алгоритм"),
-        ("scaling",    "/scaling",   "Масштабування"),
-        ("protocol",   "/protocol",  "Протокол"),
+        ("home",          "/",              "Огляд"),
+        ("data",          "/data",          "Дані Лаб.1-2"),
+        ("distributed",   "/distributed",   "Розподілений перебір"),
+        ("satisfaction",  "/satisfaction",  "Індекси задоволеності"),
+        ("large",         "/large",         "n ≫ 12 · ГА"),
+        ("protocol",      "/protocol",      "Протокол"),
     ]
     nav_html = "".join(
         f'<a href="{href}" class="{ "active" if key == active else "" }">{name}</a>'
@@ -131,11 +131,11 @@ def page(title: str, body: str, active: str = "") -> str:
     return f"""<!DOCTYPE html>
 <html lang="uk"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{title} — Лабораторна №3</title>
+<title>{title} — Лабораторна №4</title>
 <style>{CSS}</style></head>
 <body><div class="app">
 <header class="topbar">
-  <h1>Лабораторна робота №3 — визначення колективного ранжування</h1>
+  <h1>Лабораторна робота №4 — розподілені обчислення компромісних ранжувань</h1>
   <p>Інтелектуальна обробка даних в розподілених інформаційних середовищах · КН-41</p>
   <nav class="tabs">{nav_html}</nav>
 </header>
