@@ -27,6 +27,7 @@ from . import storage as S
 from . import algorithms as A
 from . import lab4 as L4
 from . import lab5 as L5
+from . import lab6 as L6
 
 
 # ---------------------------------------------------------------------------
@@ -753,6 +754,17 @@ def render_hub() -> str:
     except Exception:
         l5_total = "—"
 
+    # Лаб.6: розрахунок r, ρ і S для варіанта 8.
+    try:
+        l6_report = L6.compute(L6.PI_V8)
+        l6_total = L5._fmt(l6_report["total_real"])
+        l6_rho = f'{l6_report["rho"]*100:.1f}%'
+        l6_speedup = f'×{l6_report["speedup"]:.2f}'
+    except Exception:
+        l6_total = "—"
+        l6_rho = "—"
+        l6_speedup = "—"
+
     body = f"""
 <div class="card">
   <h2>Лабораторні роботи курсу</h2>
@@ -789,6 +801,22 @@ def render_hub() -> str:
       <div class="item"><div class="l">Реальна r</div><div class="v">{l5_total}</div></div>
     </div>
     <p style="margin-top:14px"><a class="btn" href="/lab5">Відкрити Лаб.5 →</a></p>
+  </div>
+
+  <div class="card">
+    <h2>Лабораторна №6</h2>
+    <p class="lead">Продовження Лаб.5 з двома додатковими метриками:
+       <b>завантаженість системи</b> ρ = r/Σπ (наскільки система загружена
+       загалом) та <b>прискорення системи</b> S = r/max π_i (у скільки разів
+       швидше за окремий найшвидший пристрій). Граф ФП=0 топологічно
+       подібний до Лаб.5, але з іншою нумерацією у підсистемі 2 та власним
+       набором π зі стовпчика №8.</p>
+    <div class="kpi">
+      <div class="item"><div class="l">Реальна r</div><div class="v">{l6_total}</div></div>
+      <div class="item"><div class="l">ρ системи</div><div class="v">{l6_rho}</div></div>
+      <div class="item"><div class="l">Прискорення S</div><div class="v">{l6_speedup}</div></div>
+    </div>
+    <p style="margin-top:14px"><a class="btn" href="/lab6">Відкрити Лаб.6 →</a></p>
   </div>
 </div>
 """
@@ -1047,6 +1075,267 @@ def render_lab5(pi=None, error: str = "") -> str:
 
 
 # ---------------------------------------------------------------------------
+# Сторінка /lab6 — Лабораторна №6 (продовження Лаб.5)
+# ---------------------------------------------------------------------------
+def render_lab6(pi=None, error: str = "") -> str:
+    if pi is None:
+        pi = list(L6.PI_V8)
+
+    try:
+        report = L6.compute(pi)
+    except ValueError as exc:
+        report = L6.compute(L6.PI_V8)
+        pi = list(L6.PI_V8)
+        error = error or f"Помилка у введених даних: {exc}. Показано дефолтні значення."
+
+    svg = L6.graph_svg(report)
+
+    n_bottlenecks = len(report["bottlenecks"])
+    n_underloaded = len(report["incompatibilities"])
+    max_pi_str = f'{L5._fmt(report["max_pi"])} (вузли {report["max_pi_nodes"]})'
+
+    kpi_html = f"""
+    <div class="grid cols-3">
+      {T.stat("Реальна продуктивність r",  L5._fmt(report["total_real"]))}
+      {T.stat("Сума пікових Σπ",           L5._fmt(report["sum_peak"]))}
+      {T.stat("ρ — завантаженість системи", f'{report["rho"]*100:.2f}%')}
+      {T.stat("max π_i (1 пристрій)",      max_pi_str)}
+      {T.stat("S — прискорення системи",   f'×{report["speedup"]:.2f}')}
+      {T.stat("Бутилок / недозавантаж.",   f'{n_bottlenecks} / {n_underloaded}')}
+    </div>
+    """
+
+    sub_blocks = []
+    for sub in report["subsystems"]:
+        rows = []
+        for ld in sub["loads"]:
+            tag = ('<span class="tag red">бутилка</span>' if ld["is_min"]
+                   else ('<span class="tag green">p=1</span>' if ld["p"] >= 0.9999
+                         else '<span class="tag indigo">недозавантаж.</span>'))
+            rows.append([
+                ld["node"], L5._fmt(ld["pi"]),
+                f'{L5._fmt(sub["min_pi"])} / {L5._fmt(ld["pi"])}',
+                f'<b>{ld["p"]:.4f}</b>',
+                f'{ld["p"]*100:.1f}%',
+                tag,
+            ])
+        sub_blocks.append(f"""
+        <h3>Підсистема {sub['id']} · вузли {sub['nodes']} · l={sub['device_count']}</h3>
+        <p class="muted">π<sup>({sub['id']})</sup> = min(π_i) =
+           <span class="kbd">{L5._fmt(sub['min_pi'])}</span>,
+           r<sup>({sub['id']})</sup> = l · π<sup>({sub['id']})</sup> =
+           <span class="kbd">{L5._fmt(sub['real_productivity'])}</span></p>
+        {T.table(
+            ["Вузол",
+             "π_i (пікова продуктивність пристрою)",
+             "π^(k)/π_i (підрахунок завантаженості)",
+             "p_i (завантаженість, частка часу)",
+             "p_i, % (% часу пристрій реально працює)",
+             "Стан"],
+            rows
+        )}
+        """)
+    sub_tables_html = "".join(sub_blocks)
+
+    bar_items = []
+    for sub in report["subsystems"]:
+        for ld in sub["loads"]:
+            bar_items.append((f'#{ld["node"]} (π={L5._fmt(ld["pi"])})',
+                              round(ld["p"] * 100, 1)))
+    bar_html = T.bar_chart(bar_items, maximum=100)
+
+    if report["is_compatible"]:
+        incomp_html = T.alert(
+            "Система сумісна — у кожній підсистемі всі π_i рівні, "
+            "усі завантаженості p_i = 1.", "ok")
+    else:
+        rows = [
+            [f'#{x["node"]}', x["subsys"], L5._fmt(x["pi"]),
+             f'{x["p"]*100:.1f}%', f'{x["underload"]*100:.1f}%',
+             L5._fmt(x["wasted"])]
+            for x in report["incompatibilities"]
+        ]
+        incomp_table = T.table(
+            ["Пристрій",
+             "Підсистема",
+             "π_i (пікова продуктивність)",
+             "p_i (завантаженість)",
+             "Простій (1 − p_i)",
+             "Втрачено од. (π_i − π^(k))"],
+            rows
+        )
+        causes_html = "<ul style='margin-left:20px;color:#334155;line-height:1.7'>" \
+                      + "".join(f"<li>{c}</li>" for c in report["causes"]) \
+                      + "</ul>"
+        incomp_html = (
+            T.alert(
+                f"Виявлено несумісність: {len(report['incompatibilities'])} "
+                "пристроїв працюють на неповну потужність.", "warn"
+            )
+            + incomp_table
+            + "<h3>Причини несумісності</h3>"
+            + causes_html
+        )
+
+    def _sugg_chips(values):
+        chips = "".join(
+            f'<span class="rk"><b>π_{i}</b>{L5._fmt(v)}</span>'
+            for i, v in enumerate(values)
+        )
+        return f'<div class="ranking">{chips}</div>'
+
+    down = report["suggestion_down"]
+    up = report["suggestion_up"]
+
+    def _quick_metrics(vals):
+        rep = L6.compute(vals)
+        return rep["total_real"], rep["rho"], rep["speedup"]
+
+    r_down, rho_down, S_down = _quick_metrics(down)
+    r_up, rho_up, S_up = _quick_metrics(up)
+
+    sugg_html = f"""
+    <h3>Стратегія А · «Зрівняти вниз»</h3>
+    <p class="lead">Усі π_i у кожній підсистемі знижуються до min π цієї
+       підсистеми. Реальна продуктивність системи лишається такою ж:
+       <span class="kbd">r = {L5._fmt(r_down)}</span>; всі p_i = 1; ρ зростає
+       до <span class="kbd">{rho_down*100:.1f}%</span>; S =
+       <span class="kbd">×{S_down:.2f}</span>.</p>
+    {_sugg_chips(down)}
+    <form method="POST" action="/lab6" class="inline" style="margin-top:10px">
+      {''.join(f'<input type="hidden" name="pi_{i}" value="{L5._fmt(v)}">'
+               for i, v in enumerate(down))}
+      <button class="btn secondary" type="submit">Застосувати «вниз» до форми ↓</button>
+    </form>
+
+    <h3 style="margin-top:18px">Стратегія Б · «Зрівняти вгору»</h3>
+    <p class="lead">Усі π_i у кожній підсистемі підвищуються до max π цієї
+       підсистеми — потребує апгрейду слабких. Дає максимальну продуктивність:
+       <span class="kbd">r = {L5._fmt(r_up)}</span>; всі p_i = 1; ρ =
+       <span class="kbd">{rho_up*100:.1f}%</span>; S =
+       <span class="kbd">×{S_up:.2f}</span>.</p>
+    {_sugg_chips(up)}
+    <form method="POST" action="/lab6" class="inline" style="margin-top:10px">
+      {''.join(f'<input type="hidden" name="pi_{i}" value="{L5._fmt(v)}">'
+               for i, v in enumerate(up))}
+      <button class="btn" type="submit">Застосувати «вгору» до форми ↑</button>
+    </form>
+    """
+
+    form_inputs = []
+    for sub in L6.GRAPH_V8["subsystems"]:
+        cells = []
+        for n in sub["nodes"]:
+            cells.append(
+                f'<label style="display:flex;flex-direction:column;gap:2px;'
+                f'min-width:90px"><span class="muted" style="font-size:.78rem">'
+                f'π<sub>{n}</sub></span>'
+                f'<input type="number" name="pi_{n}" step="any" min="0.001" '
+                f'value="{L5._fmt(pi[n])}" required style="padding:6px 8px;'
+                f'font-size:.9rem"></label>'
+            )
+        form_inputs.append(
+            f'<div style="background:#f8fafc;border:1px solid #e2e8f0;'
+            f'border-radius:8px;padding:10px 12px;margin-bottom:10px">'
+            f'<b style="color:#312e81">Підсистема {sub["id"]}</b> '
+            f'<span class="muted">(вузли {sub["nodes"]})</span>'
+            f'<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">'
+            f'{"".join(cells)}</div></div>'
+        )
+
+    form_html = f"""
+    <form method="POST" action="/lab6">
+      {''.join(form_inputs)}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn" type="submit" name="action" value="calc">
+          Розрахувати
+        </button>
+        <a class="btn secondary" href="/lab6">Скинути до варіанта 8</a>
+      </div>
+    </form>
+    """
+
+    err_html = T.alert(error, "warn") if error else ""
+
+    body = f"""
+{err_html}
+
+<div class="card">
+  <h2>Постановка задачі</h2>
+  <p class="lead">Лаб.6 — продовження Лаб.5. Той самий тип системи з
+     {L6.N_DEVICES} пристроями у {len(L6.GRAPH_V8['subsystems'])} незалежних
+     підсистемах. <b>Граф ФП=0</b> топологічно подібний до Лаб.5, але у
+     підсистемі 2 інша нумерація вузлів (корінь — вузол 6, лист — вузол 9).
+     Значення π зі стовпчика №8 Таблиці 1 Лаб.6 — інші, ніж у Лаб.5.</p>
+  <p>До чотирьох пунктів Лаб.5 (завантаженості, реальна продуктивність,
+     несумісність, сумісні значення) додаються <b>дві нові метрики</b>:</p>
+  <ul style="margin-left:22px;line-height:1.8;color:#334155">
+    <li><b>Завантаженість системи</b> ρ = r / Σπ_i — частка від теоретичної
+       максимальної потужності, яка реально використовується. ρ ∈ (0, 1];
+       1.0 = ідеально завантажена система, &lt; 1.0 = є простої.</li>
+    <li><b>Прискорення системи</b> S = r / max π_i — у скільки разів уся
+       система швидша за окремий найшвидший пристрій. Показує
+       ефективність розпаралелювання.</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2>1. Граф системи функціональних пристроїв</h2>
+  <p class="lead">Червоні вузли — бутилки (π_i = π<sup>(k)</sup>),
+     визначають продуктивність своєї підсистеми. Сині — недозавантажені.
+     Зелені — повністю завантажені (p_i = 1, але не бутилки).</p>
+  {svg}
+</div>
+
+<div class="card">
+  <h2>2-4. Реальна продуктивність, завантаженість і прискорення системи</h2>
+  {kpi_html}
+  <p class="muted" style="margin-top:10px">
+    <b>r</b> = Σ l<sub>k</sub>·π<sup>(k)</sup> =
+    {' + '.join(f'{s["device_count"]}·{L5._fmt(s["min_pi"])}' for s in report['subsystems'])}
+    = <span class="kbd">{L5._fmt(report['total_real'])}</span><br>
+    <b>ρ</b> = r / Σπ_i =
+    {L5._fmt(report['total_real'])} / {L5._fmt(report['sum_peak'])} =
+    <span class="kbd">{report['rho']:.4f}</span> ≈
+    <span class="kbd">{report['rho']*100:.2f}%</span><br>
+    <b>S</b> = r / max π_i =
+    {L5._fmt(report['total_real'])} / {L5._fmt(report['max_pi'])} =
+    <span class="kbd">×{report['speedup']:.4f}</span>
+  </p>
+</div>
+
+<div class="card">
+  <h2>1. Завантаженості усіх пристроїв системи</h2>
+  {sub_tables_html}
+  <h3 style="margin-top:18px">Розподіл p_i по пристроях</h3>
+  {bar_html}
+</div>
+
+<div class="card">
+  <h2>5-6. Несумісність системи та її причини</h2>
+  {incomp_html}
+</div>
+
+<div class="card">
+  <h2>7. Запропоновані продуктивності для сумісної системи</h2>
+  <p class="lead">Сумісна система = у кожній підсистемі всі π_i рівні,
+     усі p_i = 1, простоїв немає. Зверніть увагу як змінюються ρ і S
+     при кожній стратегії.</p>
+  {sugg_html}
+</div>
+
+<div class="card">
+  <h2>8. Інтерактивне введення даних</h2>
+  <p class="lead">Введіть власні значення пікових продуктивностей π_i і
+     натисніть «Розрахувати». Граф ФП фіксований під варіант 8 Лаб.6.</p>
+  {form_html}
+</div>
+"""
+    return T.page("Лаб.6 · ФП", body, active="home_l6",
+                  lab_num=6, tabs=T.LAB6_TABS)
+
+
+# ---------------------------------------------------------------------------
 # Допоміжні функції відповіді
 # ---------------------------------------------------------------------------
 def _send_html(handler: BaseHTTPRequestHandler, html: str, status: int = 200):
@@ -1108,6 +1397,8 @@ class handler(BaseHTTPRequestHandler):
                 _send_html(self, render_home()); return
             if path == "/lab5":
                 _send_html(self, render_lab5()); return
+            if path == "/lab6":
+                _send_html(self, render_lab6()); return
             if path == "/data":
                 _send_html(self, render_data()); return
             if path == "/distributed":
@@ -1154,6 +1445,14 @@ class handler(BaseHTTPRequestHandler):
                     _send_html(self, render_lab5(pi=pi))
                 except ValueError as exc:
                     _send_html(self, render_lab5(error=str(exc)))
+                return
+            if path == "/lab6":
+                params = parse_qs(raw)
+                try:
+                    pi = L6.parse_form_pi(params)
+                    _send_html(self, render_lab6(pi=pi))
+                except ValueError as exc:
+                    _send_html(self, render_lab6(error=str(exc)))
                 return
             _send_html(self, _error_page("Метод POST для цього шляху не підтримується."), 405)
         except Exception as exc:  # pragma: no cover
