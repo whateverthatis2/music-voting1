@@ -5,6 +5,8 @@
   ],
   "routes": [
     {"src": "/healthz",       "dest": "/api/index.py"},
+    {"src": "/lab4",          "dest": "/api/index.py"},
+    {"src": "/lab5",          "dest": "/api/index.py"},
     {"src": "/data",          "dest": "/api/index.py"},
     {"src": "/distributed",   "dest": "/api/index.py"},
     {"src": "/satisfaction",  "dest": "/api/index.py"},

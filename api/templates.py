@@ -113,17 +113,47 @@ form.inline{display:flex;gap:8px;align-items:center}
 
 
 # ---------------------------------------------------------------------------
+# Набори вкладок для сторінок
+# ---------------------------------------------------------------------------
+LAB4_TABS = [
+    ("home_l4",       "/lab4",          "Огляд"),
+    ("data",          "/data",          "Дані Лаб.1-2"),
+    ("distributed",   "/distributed",   "Розподілений перебір"),
+    ("satisfaction",  "/satisfaction",  "Індекси задоволеності"),
+    ("large",         "/large",         "n ≫ 12 · ГА"),
+    ("protocol",      "/protocol",      "Протокол"),
+]
+
+LAB5_TABS = [
+    ("home_l5",       "/lab5",          "Огляд Лаб.5"),
+]
+
+HUB_TABS = [
+    ("hub",           "/",              "Усі лабораторні"),
+    ("hub_l4",        "/lab4",          "Лаб.4"),
+    ("hub_l5",        "/lab5",          "Лаб.5"),
+]
+
+
+_HEADERS = {
+    0: ("ІОД РІС · лабораторні роботи",
+        "Інтелектуальна обробка даних в розподілених інформаційних середовищах · КН-41"),
+    4: ("Лабораторна робота №4 — розподілені обчислення компромісних ранжувань",
+        "Інтелектуальна обробка даних в розподілених інформаційних середовищах · КН-41"),
+    5: ("Лабораторна робота №5 — характеристики систем функціональних пристроїв",
+        "Інтелектуальна обробка даних в розподілених інформаційних середовищах · КН-41"),
+}
+
+
+# ---------------------------------------------------------------------------
 # Базовий каркас сторінки
 # ---------------------------------------------------------------------------
-def page(title: str, body: str, active: str = "") -> str:
-    tabs = [
-        ("home",          "/",              "Огляд"),
-        ("data",          "/data",          "Дані Лаб.1-2"),
-        ("distributed",   "/distributed",   "Розподілений перебір"),
-        ("satisfaction",  "/satisfaction",  "Індекси задоволеності"),
-        ("large",         "/large",         "n ≫ 12 · ГА"),
-        ("protocol",      "/protocol",      "Протокол"),
-    ]
+def page(title: str, body: str, active: str = "",
+         lab_num: int = 4, tabs: list | None = None) -> str:
+    if tabs is None:
+        tabs = LAB4_TABS
+    h1, sub = _HEADERS.get(lab_num, _HEADERS[4])
+    title_suffix = "ІОД РІС" if lab_num == 0 else f"Лабораторна №{lab_num}"
     nav_html = "".join(
         f'<a href="{href}" class="{ "active" if key == active else "" }">{name}</a>'
         for key, href, name in tabs
@@ -131,12 +161,12 @@ def page(title: str, body: str, active: str = "") -> str:
     return f"""<!DOCTYPE html>
 <html lang="uk"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{title} — Лабораторна №4</title>
+<title>{title} — {title_suffix}</title>
 <style>{CSS}</style></head>
 <body><div class="app">
 <header class="topbar">
-  <h1>Лабораторна робота №4 — розподілені обчислення компромісних ранжувань</h1>
-  <p>Інтелектуальна обробка даних в розподілених інформаційних середовищах · КН-41</p>
+  <h1>{h1}</h1>
+  <p>{sub}</p>
   <nav class="tabs">{nav_html}</nav>
 </header>
 {body}

@@ -26,6 +26,7 @@ from . import templates as T
 from . import storage as S
 from . import algorithms as A
 from . import lab4 as L4
+from . import lab5 as L5
 
 
 # ---------------------------------------------------------------------------
@@ -123,27 +124,8 @@ def render_home() -> str:
      max d = <span class="kbd">{dis["best_max_value"]}</span></p>
   {T.alert(_coincidence_alert(coincide, cen, dis), "ok" if coincide else "warn")}
 </div>
-
-<div class="card">
-  <h2>Послідовність виконання (за PDF)</h2>
-  <ol style="margin-left:18px;color:#334155;line-height:1.8">
-    <li>Зчитати дані Лаб.1-2 → <a href="/data">Дані Лаб.1-2</a>.</li>
-    <li>Запропонувати схему декомпозиції перебору та довести повноту →
-        <a href="/distributed">Розподілений перебір</a>.</li>
-    <li>Здійснити розподілений прямий перебір; довести збіг із Лаб.3 →
-        <a href="/distributed">Розподілений перебір</a>.</li>
-    <li>Вибрати A*, обчислити d^j, штраф (n-3) для видалених об'єктів,
-        індекс s^j → <a href="/satisfaction">Індекси задоволеності</a>.</li>
-    <li>Для n ≫ 12 — згенерувати випадкові трійки, запустити ГА
-        централізовано та розподілено →
-        <a href="/large">n ≫ 12 · ГА</a>.</li>
-    <li>Зберегти протокол обчислень →
-        <a href="/protocol">Протокол</a> ·
-        <a href="/protocol.txt">завантажити .txt</a>.</li>
-  </ol>
-</div>
 """
-    return T.page("Огляд", body, active="home")
+    return T.page("Огляд", body, active="home_l4")
 
 
 def _coincidence_alert(ok: bool, cen, dis) -> str:
@@ -224,7 +206,7 @@ def render_data() -> str:
 </div>
 
 <div class="card">
-  <h2>4. Оригінальні трійки Лаб.1 (з можливими видаленими об'єктами)</h2>
+  <h2>4. Оригінальні трійки Лаб.1</h2>
   <p class="lead">Трійки до застосування евристик Лаб.2. Об'єкти,
      відмічені <span class="tag red">червоним</span>, видалені евристиками
      і не входять до робочої підмножини. Саме для таких трійок у Лаб.4
@@ -289,17 +271,6 @@ def render_distributed() -> str:
      всіма можливими способами. Гілки виконуються паралельно
      (ThreadPoolExecutor, {dis["n_workers"]} потоків — по числу віртуальних
      "вузлів" розподіленої системи).</p>
-
-  <h3>Доведення повноти декомпозиції</h3>
-  <p>Нехай π — будь-яка перестановка множини об'єктів {{o₁, …, oₙ}}, n = {n}.
-     Розглянемо її перший елемент π(1) = oᵢ. Така перестановка належить
-     рівно гілці i (бо тільки в цій гілці перший елемент дорівнює oᵢ),
-     а її «хвіст» π(2..n) є деякою перестановкою решти n−1 об'єктів —
-     отже, вона генерується всередині гілки. Звідси:</p>
-  <div class="code-block">|Гілка_i| = (n−1)! = {n_minus_1_fact}
-Σ |Гілка_i| = n · (n−1)! = n! = {cen["n_perm"]}
-Гілки попарно не перетинаються (різний π(1)).</div>
-  <p>Отже, об'єднання гілок дає повну множину з n! перестановок без повторів.</p>
 
   <h3>Фактично оброблено перестановок</h3>
   <div class="grid cols-3">
@@ -432,16 +403,7 @@ def render_satisfaction() -> str:
 </div>
 
 <div class="card">
-  <h2>2. Формули обчислення (п.8-10 завдання)</h2>
-  <div class="code-block">d^j = |r^j_i1 − r*_i1| + |r^j_i2 − r*_i2| + |r^j_i3 − r*_i3|
-якщо в трійці експерта j є об'єкт, видалений евристиками Лаб.2:
-    d^j = d^l + (n − 3),         де d^l — d по решті об'єктів трійки
-s^j = (1 − d^j / ((n − 3) · 3)) · 100 %</div>
-  <p class="muted">У нашому випадку n = {n}, отже max d^j = 3·(n−3) = {max_d}.</p>
-</div>
-
-<div class="card">
-  <h2>3. Відстані та індекси задоволеності експертів</h2>
+  <h2>2. Відстані та індекси задоволеності експертів</h2>
   <p class="lead">d_part — внесок об'єктів, що залишились після евристик;
      d — повна відстань зі штрафом (n−3) за видалені об'єкти.</p>
   {T.table(
@@ -451,7 +413,7 @@ s^j = (1 − d^j / ((n − 3) · 3)) · 100 %</div>
 </div>
 
 <div class="card">
-  <h2>4. Підсумкові показники задоволеності</h2>
+  <h2>3. Підсумкові показники задоволеності</h2>
   <div class="grid cols-3">
     {T.stat("Середній індекс s", f"{avg_s:.2f}%")}
     {T.stat("Мінімальний s",     f"{min_s:.2f}%")}
@@ -547,16 +509,31 @@ def render_large() -> str:
       ]
   )}
   <h3>Збіжність централізованого ГА</h3>
+  <p class="muted">По осі X — номер покоління; число у кінці смужки —
+     <b>Σ d найкращого розв'язку</b>, знайденого алгоритмом до цього покоління.
+     Менше — краще. Однакові підряд значення (наприклад 902 → 902 → 902) означають,
+     що в цих поколіннях кращого розв'язку не знайдено; стрибок униз
+     (902 → 853) — мутація / схрещування знайшли покращення.</p>
   {cen_chart}
   <h3>Збіжність розподіленого ГА (по епохах)</h3>
+  <p class="muted">Те саме, але для острівної моделі — точки відповідають
+     епохам (між якими відбувається міграція між островами).</p>
   {dis_chart}
 </div>
 
 <div class="card">
   <h2>4. Порівняльна таблиця для сітки задач</h2>
   <p class="lead">Сітка n_alt × n_exp = {{20, 50, 100}} × {{10, 20, 30}}.
-     Параметри ГА (pop_total / n_gen) підібрано так, щоб централізований
-     і розподілений варіанти мали однакову обчислювальну роботу.</p>
+     Кожен рядок — одна синтетична задача.
+     <br><b>Σ d центр.</b> та <b>Σ d розпод.</b> — мінімальна сумарна відстань
+     (компроміс), знайдена централізованим і розподіленим ГА відповідно.
+     Менше = кращий компроміс.
+     <br><b>T центр.</b> та <b>T розпод.</b> — час роботи (у секундах)
+     централізованого та розподіленого ГА відповідно (скільки реально тривало
+     обчислення).
+     <br><b>Δ якості</b> = (Σ d центр.) − (Σ d розпод.) — наскільки розподілений
+     ГА знайшов кращий розв'язок (додатне число — розподілений виграв).
+     <b>Покращення %</b> — те саме у відсотках відносно Σ d централізованого.</p>
   {T.table(
       ["n_alt", "n_exp", "pop/gen",
        "Σ d центр.", "T центр.",
@@ -755,6 +732,309 @@ def render_protocol_txt() -> str:
 
 
 # ---------------------------------------------------------------------------
+# Хаб на /  — список лабораторних, у які можна перейти
+# ---------------------------------------------------------------------------
+def render_hub() -> str:
+    # Лаб.4: підтягуємо середній індекс задоволеності (це вже кешований
+    # результат після першого запиту; для cold-start можна отримати
+    # невелику затримку, але це і є очікувана поведінка).
+    sat_avg = "—"
+    try:
+        sat = _satisfactions()
+        if sat:
+            sat_avg = f"{sum(r['s'] for r in sat) / len(sat):.1f}%"
+    except Exception:
+        sat_avg = "—"
+
+    # Лаб.5: швидкий розрахунок r для варіанта 8.
+    try:
+        l5_report = L5.compute(L5.PI_V8)
+        l5_total = L5._fmt(l5_report["total_real"])
+    except Exception:
+        l5_total = "—"
+
+    body = f"""
+<div class="card">
+  <h2>Лабораторні роботи курсу</h2>
+  <p class="lead">Інтелектуальна обробка даних в розподілених інформаційних
+     середовищах · спеціальність 122 «Комп'ютерні науки», КН-41.
+     Кожна лабораторна — окремий розділ цього додатку.</p>
+</div>
+
+<div class="grid cols-2">
+  <div class="card">
+    <h2>Лабораторна №4</h2>
+    <p class="lead">Розподілені обчислення компромісних ранжувань методом
+       прямого перебору з декомпозицією; обчислення індексів задоволеності
+       експертів колективним розв'язком; евристичне розв'язання для n ≫ 12
+       за допомогою генетичного алгоритму (централізовано та острівна модель).</p>
+    <div class="kpi">
+      <div class="item"><div class="l">Середній індекс s</div><div class="v">{sat_avg}</div></div>
+      <div class="item"><div class="l">Об'єктів</div><div class="v">{len(D.OBJECTS)}</div></div>
+      <div class="item"><div class="l">Експертів</div><div class="v">{len(D.EXPERTS)}</div></div>
+    </div>
+    <p style="margin-top:14px"><a class="btn" href="/lab4">Відкрити Лаб.4 →</a></p>
+  </div>
+
+  <div class="card">
+    <h2>Лабораторна №5</h2>
+    <p class="lead">Визначення характеристик систем функціональних пристроїв
+       за першим законом Амдала: завантаженості p_i кожного пристрою, реальна
+       продуктивність системи, аналіз несумісності та пропозиція значень π,
+       при яких система стає сумісною. Інтерактивне введення продуктивностей
+       та візуалізація графа.</p>
+    <div class="kpi">
+      <div class="item"><div class="l">Варіант</div><div class="v">8</div></div>
+      <div class="item"><div class="l">Пристроїв</div><div class="v">{L5.N_DEVICES}</div></div>
+      <div class="item"><div class="l">Реальна r</div><div class="v">{l5_total}</div></div>
+    </div>
+    <p style="margin-top:14px"><a class="btn" href="/lab5">Відкрити Лаб.5 →</a></p>
+  </div>
+</div>
+"""
+    return T.page("Лабораторні", body, active="hub", lab_num=0, tabs=T.HUB_TABS)
+
+
+# ---------------------------------------------------------------------------
+# Сторінка /lab5 — Лабораторна №5
+# ---------------------------------------------------------------------------
+def render_lab5(pi=None, error: str = "") -> str:
+    if pi is None:
+        pi = list(L5.PI_V8)
+
+    try:
+        report = L5.compute(pi)
+    except ValueError as exc:
+        # помилка в π — рендеримо з дефолтними і повідомленням
+        report = L5.compute(L5.PI_V8)
+        pi = list(L5.PI_V8)
+        error = error or f"Помилка у введених даних: {exc}. Показано дефолтні значення."
+
+    # ---- Граф ----
+    svg = L5.graph_svg(report)
+
+    # ---- KPI-плити ----
+    n_bottlenecks = len(report["bottlenecks"])
+    n_underloaded = len(report["incompatibilities"])
+    kpi_html = f"""
+    <div class="grid cols-3">
+      {T.stat("Реальна продуктивність r",  L5._fmt(report["total_real"]))}
+      {T.stat("Сума пікових Σπ",           L5._fmt(report["sum_peak"]))}
+      {T.stat("Коеф. використання",        f'{report["utilization"]*100:.1f}%')}
+      {T.stat("Підсистем",                 len(report["subsystems"]))}
+      {T.stat("Бутилок (π=π^(k))",         n_bottlenecks)}
+      {T.stat("Недозавантажених",          n_underloaded)}
+    </div>
+    """
+
+    # ---- Таблиці завантаженостей по підсистемах ----
+    sub_blocks = []
+    for sub in report["subsystems"]:
+        rows = []
+        for ld in sub["loads"]:
+            tag = ('<span class="tag red">бутилка</span>' if ld["is_min"]
+                   else ('<span class="tag green">p=1</span>' if ld["p"] >= 0.9999
+                         else '<span class="tag indigo">недозавантаж.</span>'))
+            rows.append([
+                ld["node"], L5._fmt(ld["pi"]),
+                f'{L5._fmt(sub["min_pi"])} / {L5._fmt(ld["pi"])}',
+                f'<b>{ld["p"]:.4f}</b>',
+                f'{ld["p"]*100:.1f}%',
+                tag,
+            ])
+        sub_blocks.append(f"""
+        <h3>Підсистема {sub['id']} · вузли {sub['nodes']} · l={sub['device_count']}</h3>
+        <p class="muted">π<sup>({sub['id']})</sup> = min(π_i) =
+           <span class="kbd">{L5._fmt(sub['min_pi'])}</span>,
+           r<sup>({sub['id']})</sup> = l · π<sup>({sub['id']})</sup> =
+           <span class="kbd">{L5._fmt(sub['real_productivity'])}</span></p>
+        {T.table(["Вузол", "π_i", "π^(k)/π_i", "p_i", "p_i, %", "Стан"], rows)}
+        """)
+    sub_tables_html = "".join(sub_blocks)
+
+    # ---- Стовпчикова діаграма завантаженостей ----
+    bar_items = []
+    for sub in report["subsystems"]:
+        for ld in sub["loads"]:
+            bar_items.append((f'#{ld["node"]} (π={L5._fmt(ld["pi"])})',
+                              round(ld["p"] * 100, 1)))
+    bar_html = T.bar_chart(bar_items, maximum=100)
+
+    # ---- Несумісність ----
+    if report["is_compatible"]:
+        incomp_html = T.alert(
+            "Система сумісна — у кожній підсистемі всі π_i рівні, "
+            "усі завантаженості p_i = 1.", "ok")
+    else:
+        rows = [
+            [f'#{x["node"]}', x["subsys"], L5._fmt(x["pi"]),
+             f'{x["p"]*100:.1f}%', f'{x["underload"]*100:.1f}%',
+             L5._fmt(x["wasted"])]
+            for x in report["incompatibilities"]
+        ]
+        incomp_table = T.table(
+            ["Пристрій", "Підсистема", "π_i", "p_i", "Простій",
+             "Втрачено од. продуктивності"],
+            rows
+        )
+        causes_html = "<ul style='margin-left:20px;color:#334155;line-height:1.7'>" \
+                      + "".join(f"<li>{c}</li>" for c in report["causes"]) \
+                      + "</ul>"
+        incomp_html = (
+            T.alert(
+                f"Виявлено несумісність: {len(report['incompatibilities'])} "
+                "пристроїв працюють на неповну потужність.", "warn"
+            )
+            + incomp_table
+            + "<h3>Причини несумісності</h3>"
+            + causes_html
+        )
+
+    # ---- Сумісні значення (пропозиції) ----
+    def _sugg_chips(values, label_color):
+        chips = []
+        for i, v in enumerate(values):
+            chips.append(
+                f'<span class="rk"><b>π_{i}</b>{L5._fmt(v)}</span>'
+            )
+        return f'<div class="ranking">{"".join(chips)}</div>'
+
+    down = report["suggestion_down"]
+    up = report["suggestion_up"]
+    r_down = sum(len(s["nodes"]) * min(down[i] for i in s["nodes"])
+                 for s in L5.GRAPH_V8["subsystems"])
+    r_up = sum(len(s["nodes"]) * min(up[i] for i in s["nodes"])
+               for s in L5.GRAPH_V8["subsystems"])
+    sugg_html = f"""
+    <h3>Стратегія А · «Зрівняти вниз»</h3>
+    <p class="lead">Усі π_i у кожній підсистемі знижуються до min π цієї
+       підсистеми — нічого не докуповуємо, але втрачаємо потенціал
+       швидших пристроїв. Реальна продуктивність системи лишається
+       такою ж: <span class="kbd">r = {L5._fmt(r_down)}</span>, але всі
+       p_i = 1.</p>
+    {_sugg_chips(down, "down")}
+    <form method="POST" action="/lab5" class="inline" style="margin-top:10px">
+      {''.join(f'<input type="hidden" name="pi_{i}" value="{L5._fmt(v)}">'
+               for i, v in enumerate(down))}
+      <button class="btn secondary" type="submit">Застосувати «вниз» до форми ↓</button>
+    </form>
+
+    <h3 style="margin-top:18px">Стратегія Б · «Зрівняти вгору»</h3>
+    <p class="lead">Усі π_i у кожній підсистемі підвищуються до max π цієї
+       підсистеми — потребує апгрейду слабких пристроїв, але дає
+       максимальну реальну продуктивність:
+       <span class="kbd">r = {L5._fmt(r_up)}</span>, p_i = 1.</p>
+    {_sugg_chips(up, "up")}
+    <form method="POST" action="/lab5" class="inline" style="margin-top:10px">
+      {''.join(f'<input type="hidden" name="pi_{i}" value="{L5._fmt(v)}">'
+               for i, v in enumerate(up))}
+      <button class="btn" type="submit">Застосувати «вгору» до форми ↑</button>
+    </form>
+    """
+
+    # ---- Інтерактивна форма введення π ----
+    form_inputs = []
+    for sub in L5.GRAPH_V8["subsystems"]:
+        cells = []
+        for n in sub["nodes"]:
+            cells.append(
+                f'<label style="display:flex;flex-direction:column;gap:2px;'
+                f'min-width:90px"><span class="muted" style="font-size:.78rem">'
+                f'π<sub>{n}</sub></span>'
+                f'<input type="number" name="pi_{n}" step="any" min="0.001" '
+                f'value="{L5._fmt(pi[n])}" required style="padding:6px 8px;'
+                f'font-size:.9rem"></label>'
+            )
+        form_inputs.append(
+            f'<div style="background:#f8fafc;border:1px solid #e2e8f0;'
+            f'border-radius:8px;padding:10px 12px;margin-bottom:10px">'
+            f'<b style="color:#312e81">Підсистема {sub["id"]}</b> '
+            f'<span class="muted">(вузли {sub["nodes"]})</span>'
+            f'<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">'
+            f'{"".join(cells)}</div></div>'
+        )
+
+    form_html = f"""
+    <form method="POST" action="/lab5">
+      {''.join(form_inputs)}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn" type="submit" name="action" value="calc">
+          Розрахувати
+        </button>
+        <a class="btn secondary" href="/lab5">Скинути до варіанта 8</a>
+      </div>
+    </form>
+    """
+
+    # ---- Зборка сторінки ----
+    err_html = T.alert(error, "warn") if error else ""
+
+    body = f"""
+{err_html}
+
+<div class="card">
+  <h2>Постановка задачі</h2>
+  <p class="lead">Задано граф системи функціональних пристроїв із
+     {L5.N_DEVICES} пристроями у {len(L5.GRAPH_V8['subsystems'])} незалежних
+     підсистемах. Відомі пікові продуктивності π_i. <b>Варіант 8</b> →
+     Граф ФП=0 (Рисунок 2 з методички), продуктивності зі стовпчика №8
+     Таблиці 1.</p>
+  <p>За <b>першим законом Амдала</b>, реальна продуктивність кожної
+     підсистеми визначається найслабшим пристроєм цієї підсистеми:
+     π<sup>(k)</sup> = min{{π_i : i ∈ підсистема k}}. Завантаженість
+     пристрою p_i = π<sup>(k)</sup>/π_i; реальна продуктивність системи
+     r = Σ<sub>k</sub> l<sub>k</sub> · π<sup>(k)</sup>, де l<sub>k</sub> —
+     кількість пристроїв у підсистемі k.</p>
+</div>
+
+<div class="card">
+  <h2>1. Граф системи функціональних пристроїв</h2>
+  <p class="lead">Червоні вузли — бутилки (пристрої з π_i = π<sup>(k)</sup>),
+     визначають продуктивність своєї підсистеми. Сині — недозавантажені
+     (π_i &gt; π<sup>(k)</sup>). Зелені — повністю завантажені
+     (p_i = 1, але не бутилки — рідкий випадок при апгрейді).</p>
+  {svg}
+</div>
+
+<div class="card">
+  <h2>2. Реальна продуктивність системи</h2>
+  {kpi_html}
+  <p class="muted" style="margin-top:10px">r = Σ l<sub>k</sub>·π<sup>(k)</sup> =
+    {' + '.join(f'{s["device_count"]}·{L5._fmt(s["min_pi"])}' for s in report['subsystems'])}
+    = <span class="kbd">{L5._fmt(report['total_real'])}</span></p>
+</div>
+
+<div class="card">
+  <h2>3. Завантаженості усіх пристроїв системи</h2>
+  {sub_tables_html}
+  <h3 style="margin-top:18px">Розподіл p_i по пристроях</h3>
+  {bar_html}
+</div>
+
+<div class="card">
+  <h2>4. Несумісність системи та її причини</h2>
+  {incomp_html}
+</div>
+
+<div class="card">
+  <h2>5. Запропоновані продуктивності для сумісної системи</h2>
+  <p class="lead">Сумісна система = у кожній підсистемі всі π_i рівні,
+     отже усі p_i = 1, простоїв немає.</p>
+  {sugg_html}
+</div>
+
+<div class="card">
+  <h2>6. Інтерактивне введення даних</h2>
+  <p class="lead">Введіть власні значення пікових продуктивностей π_i і
+     натисніть «Розрахувати». Граф ФП фіксований під варіант 8.</p>
+  {form_html}
+</div>
+"""
+    return T.page("Лаб.5 · ФП", body, active="home_l5",
+                  lab_num=5, tabs=T.LAB5_TABS)
+
+
+# ---------------------------------------------------------------------------
 # Допоміжні функції відповіді
 # ---------------------------------------------------------------------------
 def _send_html(handler: BaseHTTPRequestHandler, html: str, status: int = 200):
@@ -811,7 +1091,11 @@ class handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         try:
             if path in ("", "/"):
+                _send_html(self, render_hub()); return
+            if path == "/lab4":
                 _send_html(self, render_home()); return
+            if path == "/lab5":
+                _send_html(self, render_lab5()); return
             if path == "/data":
                 _send_html(self, render_data()); return
             if path == "/distributed":
@@ -830,6 +1114,7 @@ class handler(BaseHTTPRequestHandler):
                     "db": S.db_status(),
                     "n_objects": len(D.OBJECTS),
                     "n_experts": len(D.EXPERTS),
+                    "lab5_devices": L5.N_DEVICES,
                 }); return
             _send_html(self, _error_page("Сторінку не знайдено."), 404)
         except Exception as exc:  # pragma: no cover
@@ -849,6 +1134,14 @@ class handler(BaseHTTPRequestHandler):
                 else:
                     _send_html(self, render_protocol_form(
                         "Невірний пароль. Спробуйте ще раз."), 401)
+                return
+            if path == "/lab5":
+                params = parse_qs(raw)
+                try:
+                    pi = L5.parse_form_pi(params)
+                    _send_html(self, render_lab5(pi=pi))
+                except ValueError as exc:
+                    _send_html(self, render_lab5(error=str(exc)))
                 return
             _send_html(self, _error_page("Метод POST для цього шляху не підтримується."), 405)
         except Exception as exc:  # pragma: no cover
