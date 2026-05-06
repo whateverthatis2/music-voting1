@@ -848,7 +848,15 @@ def render_lab5(pi=None, error: str = "") -> str:
            <span class="kbd">{L5._fmt(sub['min_pi'])}</span>,
            r<sup>({sub['id']})</sup> = l · π<sup>({sub['id']})</sup> =
            <span class="kbd">{L5._fmt(sub['real_productivity'])}</span></p>
-        {T.table(["Вузол", "π_i", "π^(k)/π_i", "p_i", "p_i, %", "Стан"], rows)}
+        {T.table(
+            ["Вузол",
+             "π_i (пікова продуктивність пристрою)",
+             "π^(k)/π_i (підрахунок завантаженості)",
+             "p_i (завантаженість, частка часу)",
+             "p_i, % (% часу пристрій реально працює)",
+             "Стан"],
+            rows
+        )}
         """)
     sub_tables_html = "".join(sub_blocks)
 
@@ -873,8 +881,12 @@ def render_lab5(pi=None, error: str = "") -> str:
             for x in report["incompatibilities"]
         ]
         incomp_table = T.table(
-            ["Пристрій", "Підсистема", "π_i", "p_i", "Простій",
-             "Втрачено од. продуктивності"],
+            ["Пристрій",
+             "Підсистема",
+             "π_i (пікова продуктивність)",
+             "p_i (завантаженість)",
+             "Простій (1 − p_i)",
+             "Втрачено од. (π_i − π^(k))"],
             rows
         )
         causes_html = "<ul style='margin-left:20px;color:#334155;line-height:1.7'>" \
