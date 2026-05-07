@@ -850,7 +850,7 @@ def render_lab5(pi=None, error: str = "") -> str:
       {T.stat("Сума пікових Σπ",           L5._fmt(report["sum_peak"]))}
       {T.stat("Коеф. використання",        f'{report["utilization"]*100:.1f}%')}
       {T.stat("Підсистем",                 len(report["subsystems"]))}
-      {T.stat("Бутилок (π=π^(k))",         n_bottlenecks)}
+      {T.stat("Вузьких місць (π=π^(k))",   n_bottlenecks)}
       {T.stat("Недозавантажених",          n_underloaded)}
     </div>
     """
@@ -860,7 +860,7 @@ def render_lab5(pi=None, error: str = "") -> str:
     for sub in report["subsystems"]:
         rows = []
         for ld in sub["loads"]:
-            tag = ('<span class="tag red">бутилка</span>' if ld["is_min"]
+            tag = ('<span class="tag red">вузьке місце</span>' if ld["is_min"]
                    else ('<span class="tag green">p=1</span>' if ld["p"] >= 0.9999
                          else '<span class="tag indigo">недозавантаж.</span>'))
             rows.append([
@@ -1029,10 +1029,10 @@ def render_lab5(pi=None, error: str = "") -> str:
 
 <div class="card">
   <h2>1. Граф системи функціональних пристроїв</h2>
-  <p class="lead">Червоні вузли — бутилки (пристрої з π_i = π<sup>(k)</sup>),
+  <p class="lead">Червоні вузли — вузькі місця (пристрої з π_i = π<sup>(k)</sup>),
      визначають продуктивність своєї підсистеми. Сині — недозавантажені
      (π_i &gt; π<sup>(k)</sup>). Зелені — повністю завантажені
-     (p_i = 1, але не бутилки — рідкий випадок при апгрейді).</p>
+     (p_i = 1, але не вузькі місця — рідкий випадок при апгрейді).</p>
   {svg}
 </div>
 
@@ -1101,7 +1101,7 @@ def render_lab6(pi=None, error: str = "") -> str:
       {T.stat("ρ — завантаженість системи", f'{report["rho"]*100:.2f}%')}
       {T.stat("max π_i (1 пристрій)",      max_pi_str)}
       {T.stat("S — прискорення системи",   f'×{report["speedup"]:.2f}')}
-      {T.stat("Бутилок / недозавантаж.",   f'{n_bottlenecks} / {n_underloaded}')}
+      {T.stat("Вузьких місць / недозавантаж.", f'{n_bottlenecks} / {n_underloaded}')}
     </div>
     """
 
@@ -1109,7 +1109,7 @@ def render_lab6(pi=None, error: str = "") -> str:
     for sub in report["subsystems"]:
         rows = []
         for ld in sub["loads"]:
-            tag = ('<span class="tag red">бутилка</span>' if ld["is_min"]
+            tag = ('<span class="tag red">вузьке місце</span>' if ld["is_min"]
                    else ('<span class="tag green">p=1</span>' if ld["p"] >= 0.9999
                          else '<span class="tag indigo">недозавантаж.</span>'))
             rows.append([
@@ -1281,9 +1281,9 @@ def render_lab6(pi=None, error: str = "") -> str:
 
 <div class="card">
   <h2>1. Граф системи функціональних пристроїв</h2>
-  <p class="lead">Червоні вузли — бутилки (π_i = π<sup>(k)</sup>),
+  <p class="lead">Червоні вузли — вузькі місця (π_i = π<sup>(k)</sup>),
      визначають продуктивність своєї підсистеми. Сині — недозавантажені.
-     Зелені — повністю завантажені (p_i = 1, але не бутилки).</p>
+     Зелені — повністю завантажені (p_i = 1, але не вузькі місця).</p>
   {svg}
 </div>
 
