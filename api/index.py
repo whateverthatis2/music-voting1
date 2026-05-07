@@ -1094,15 +1094,67 @@ def render_lab6(pi=None, error: str = "") -> str:
     n_underloaded = len(report["incompatibilities"])
     max_pi_str = f'{L5._fmt(report["max_pi"])} (вузли {report["max_pi_nodes"]})'
 
-    kpi_html = f"""
+    # KPI-плита для секції «реальна продуктивність» (п.2 завдання)
+    kpi_r_html = f"""
     <div class="grid cols-3">
       {T.stat("Реальна продуктивність r",  L5._fmt(report["total_real"]))}
       {T.stat("Сума пікових Σπ",           L5._fmt(report["sum_peak"]))}
-      {T.stat("ρ — завантаженість системи", f'{report["rho"]*100:.2f}%')}
-      {T.stat("max π_i (1 пристрій)",      max_pi_str)}
-      {T.stat("S — прискорення системи",   f'×{report["speedup"]:.2f}')}
-      {T.stat("Вузьких місць / недозавантаж.", f'{n_bottlenecks} / {n_underloaded}')}
+      {T.stat("Підсистем",                 len(report["subsystems"]))}
+      {T.stat("Пристроїв",                 L6.N_DEVICES)}
+      {T.stat("Вузьких місць",             n_bottlenecks)}
+      {T.stat("Недозавантажених",          n_underloaded)}
     </div>
+    """
+
+    # ───── Окрема картка для ρ (п.3 завдання) ─────
+    rho_pct = report["rho"] * 100
+    idle_pct = 100 - rho_pct
+    rho_bar = T.bar_chart(
+        [("Корисна робота",   round(rho_pct, 1)),
+         ("Простій (несумісність)", round(idle_pct, 1))],
+        maximum=100,
+    )
+    rho_card_html = f"""
+    <div class="grid cols-3">
+      {T.stat("ρ — завантаженість системи", f'{rho_pct:.2f}%')}
+      {T.stat("Корисно використано",        f'{L5._fmt(report["total_real"])} од.')}
+      {T.stat("Простоює (Σπ − r)",          f'{L5._fmt(report["sum_peak"] - report["total_real"])} од.')}
+    </div>
+    <p class="muted" style="margin-top:12px">
+      <b>Формула</b>: ρ = r / Σπ_i = <span class="kbd">{L5._fmt(report['total_real'])}</span>
+      / <span class="kbd">{L5._fmt(report['sum_peak'])}</span> =
+      <span class="kbd">{report['rho']:.4f}</span> ≈
+      <span class="kbd">{rho_pct:.2f}%</span>.<br>
+      <b>Сенс</b>: яка частка від теоретичного максимуму реально працює. У сумісної системи ρ = 1 (100%);
+      у моєму варіанті ρ ≈ <b>{rho_pct:.1f}%</b>, отже {idle_pct:.1f}% потужності пристроїв простоюють через несумісність.
+    </p>
+    <h3 style="margin-top:14px">Розподіл потужності системи</h3>
+    {rho_bar}
+    """
+
+    # ───── Окрема картка для S (п.4 завдання) ─────
+    speedup = report["speedup"]
+    efficiency_pct = (speedup / L6.N_DEVICES) * 100
+    sigma_over_max = report["sum_peak"] / report["max_pi"] if report["max_pi"] else 0
+    S_card_html = f"""
+    <div class="grid cols-3">
+      {T.stat("S — прискорення системи",   f'×{speedup:.2f}')}
+      {T.stat("max π_i (найшвидший)",      max_pi_str)}
+      {T.stat("Ефективність S/N",          f'{efficiency_pct:.1f}%')}
+    </div>
+    <p class="muted" style="margin-top:12px">
+      <b>Формула</b>: S = r / max π_i = <span class="kbd">{L5._fmt(report['total_real'])}</span>
+      / <span class="kbd">{L5._fmt(report['max_pi'])}</span> =
+      <span class="kbd">×{speedup:.4f}</span>.<br>
+      <b>Сенс</b>: у скільки разів уся система швидша за окремий найшвидший пристрій. У моєму варіанті
+      <b>×{speedup:.2f}</b> — усі {L6.N_DEVICES} пристроїв разом працюють як ~{speedup:.1f} максимально швидких пристроїв
+      (з π = {L5._fmt(report['max_pi'])}).<br>
+      <b>Теоретична межа</b>: при ідеальній сумісності S дорівнював би
+      Σπ / max π = <span class="kbd">{sigma_over_max:.2f}</span>; реальне S = <span class="kbd">{speedup:.2f}</span>,
+      тож ефективність розпаралелювання S/(Σπ/max π) =
+      <span class="kbd">{(speedup/sigma_over_max)*100 if sigma_over_max else 0:.1f}%</span>
+      (це те ж саме, що ρ).
+    </p>
     """
 
     sub_blocks = []
@@ -1280,7 +1332,7 @@ def render_lab6(pi=None, error: str = "") -> str:
 </div>
 
 <div class="card">
-  <h2>1. Граф системи функціональних пристроїв</h2>
+  <h2>Граф системи функціональних пристроїв (п.9)</h2>
   <p class="lead">Червоні вузли — вузькі місця (π_i = π<sup>(k)</sup>),
      визначають продуктивність своєї підсистеми. Сині — недозавантажені.
      Зелені — повністю завантажені (p_i = 1, але не вузькі місця).</p>
@@ -1288,27 +1340,32 @@ def render_lab6(pi=None, error: str = "") -> str:
 </div>
 
 <div class="card">
-  <h2>2-4. Реальна продуктивність, завантаженість і прискорення системи</h2>
-  {kpi_html}
-  <p class="muted" style="margin-top:10px">
-    <b>r</b> = Σ l<sub>k</sub>·π<sup>(k)</sup> =
-    {' + '.join(f'{s["device_count"]}·{L5._fmt(s["min_pi"])}' for s in report['subsystems'])}
-    = <span class="kbd">{L5._fmt(report['total_real'])}</span><br>
-    <b>ρ</b> = r / Σπ_i =
-    {L5._fmt(report['total_real'])} / {L5._fmt(report['sum_peak'])} =
-    <span class="kbd">{report['rho']:.4f}</span> ≈
-    <span class="kbd">{report['rho']*100:.2f}%</span><br>
-    <b>S</b> = r / max π_i =
-    {L5._fmt(report['total_real'])} / {L5._fmt(report['max_pi'])} =
-    <span class="kbd">×{report['speedup']:.4f}</span>
-  </p>
-</div>
-
-<div class="card">
   <h2>1. Завантаженості усіх пристроїв системи</h2>
   {sub_tables_html}
   <h3 style="margin-top:18px">Розподіл p_i по пристроях</h3>
   {bar_html}
+</div>
+
+<div class="card">
+  <h2>2. Реальна продуктивність системи r</h2>
+  {kpi_r_html}
+  <p class="muted" style="margin-top:12px">
+    <b>Формула</b>: r = Σ l<sub>k</sub>·π<sup>(k)</sup> =
+    {' + '.join(f'{s["device_count"]}·{L5._fmt(s["min_pi"])}' for s in report['subsystems'])}
+    = <span class="kbd">{L5._fmt(report['total_real'])}</span>.<br>
+    <b>Сенс</b>: сума реальних продуктивностей усіх підсистем (вони працюють паралельно).
+    Кожна підсистема працює на швидкості свого найповільнішого пристрою (закон Амдала).
+  </p>
+</div>
+
+<div class="card" style="border-left:4px solid #4f46e5">
+  <h2>3. Завантаженість системи ρ <span class="tag indigo">нове в Лаб.6</span></h2>
+  {rho_card_html}
+</div>
+
+<div class="card" style="border-left:4px solid #4f46e5">
+  <h2>4. Прискорення системи S <span class="tag indigo">нове в Лаб.6</span></h2>
+  {S_card_html}
 </div>
 
 <div class="card">
