@@ -28,6 +28,7 @@ from . import algorithms as A
 from . import lab4 as L4
 from . import lab5 as L5
 from . import lab6 as L6
+from . import lab7 as L7
 
 
 # ---------------------------------------------------------------------------
@@ -765,6 +766,18 @@ def render_hub() -> str:
         l6_rho = "—"
         l6_speedup = "—"
 
+    # Лаб.7: розрахунок R_s, E_s для варіанта 8 (рисунок 4).
+    try:
+        l7_fig = L7.FIGURES[L7.DEFAULT_FIGURE]
+        l7_report = L7.compute(N=l7_fig["N"], n=l7_fig["n"], s=l7_fig["q"])
+        l7_R = f'×{l7_report["R_s"]:.3f}'
+        l7_E = f'{l7_report["E_s"]*100:.2f}%'
+        l7_beta = l7_report["beta_str"]
+    except Exception:
+        l7_R = "—"
+        l7_E = "—"
+        l7_beta = "—"
+
     body = f"""
 <div class="card">
   <h2>Лабораторні роботи курсу</h2>
@@ -817,6 +830,21 @@ def render_hub() -> str:
       <div class="item"><div class="l">Прискорення S</div><div class="v">{l6_speedup}</div></div>
     </div>
     <p style="margin-top:14px"><a class="btn" href="/lab6">Відкрити Лаб.6 →</a></p>
+  </div>
+
+  <div class="card">
+    <h2>Лабораторна №7</h2>
+    <p class="lead">Інша задача: <b>максимальне прискорення</b> R_s та
+       <b>ефективність</b> E_s = R_s/s системи з s однакових простих процесорів,
+       яка реалізує алгоритм за його паралельною формою. Використовуємо
+       2-й і 3-й закони Амдала: R_s = s/(β·s + 1−β), R ≤ 1/β. Усі п'ять графів
+       з PDF реалізовано; для варіанта 8 — рисунок №4.</p>
+    <div class="kpi">
+      <div class="item"><div class="l">β = n/N</div><div class="v">{l7_beta}</div></div>
+      <div class="item"><div class="l">R_s (s=q)</div><div class="v">{l7_R}</div></div>
+      <div class="item"><div class="l">Ефективність E_s</div><div class="v">{l7_E}</div></div>
+    </div>
+    <p style="margin-top:14px"><a class="btn" href="/lab7">Відкрити Лаб.7 →</a></p>
   </div>
 </div>
 """
@@ -1019,6 +1047,13 @@ def render_lab5(pi=None, error: str = "") -> str:
      підсистемах. Відомі пікові продуктивності π_i. <b>Варіант 8</b> →
      Граф ФП=0 (Рисунок 2 з методички), продуктивності зі стовпчика №8
      Таблиці 1.</p>
+  <p class="muted" style="font-size:.85rem">
+     <b>Дефолтні π зі стовпчика №8</b>:
+     π_0={L5.PI_V8[0]}, π_1={L5.PI_V8[1]}, π_2={L5.PI_V8[2]}, π_3={L5.PI_V8[3]},
+     π_4={L5.PI_V8[4]}, π_5={L5.PI_V8[5]}, π_6={L5.PI_V8[6]}, π_7={L5.PI_V8[7]},
+     π_8={L5.PI_V8[8]}, π_9={L5.PI_V8[9]}, π_10={L5.PI_V8[10]}, π_11={L5.PI_V8[11]},
+     π_12={L5.PI_V8[12]}, π_13={L5.PI_V8[13]}, π_14={L5.PI_V8[14]}.
+  </p>
   <p>За <b>першим законом Амдала</b>, реальна продуктивність кожної
      підсистеми визначається найслабшим пристроєм цієї підсистеми:
      π<sup>(k)</sup> = min{{π_i : i ∈ підсистема k}}. Завантаженість
@@ -1319,6 +1354,13 @@ def render_lab6(pi=None, error: str = "") -> str:
      підсистемах. <b>Граф ФП=0</b> топологічно подібний до Лаб.5, але у
      підсистемі 2 інша нумерація вузлів (корінь — вузол 6, лист — вузол 9).
      Значення π зі стовпчика №8 Таблиці 1 Лаб.6 — інші, ніж у Лаб.5.</p>
+  <p class="muted" style="font-size:.85rem">
+     <b>Дефолтні π зі стовпчика №8 Таблиці 1 Лаб.6</b>:
+     π_0={L6.PI_V8[0]}, π_1={L6.PI_V8[1]}, π_2={L6.PI_V8[2]}, π_3={L6.PI_V8[3]},
+     π_4={L6.PI_V8[4]}, π_5={L6.PI_V8[5]}, π_6={L6.PI_V8[6]}, π_7={L6.PI_V8[7]},
+     π_8={L6.PI_V8[8]}, π_9={L6.PI_V8[9]}, π_10={L6.PI_V8[10]}, π_11={L6.PI_V8[11]},
+     π_12={L6.PI_V8[12]}, π_13={L6.PI_V8[13]}, π_14={L6.PI_V8[14]}.
+  </p>
   <p>До чотирьох пунктів Лаб.5 (завантаженості, реальна продуктивність,
      несумісність, сумісні значення) додаються <b>дві нові метрики</b>:</p>
   <ul style="margin-left:22px;line-height:1.8;color:#334155">
@@ -1393,6 +1435,277 @@ def render_lab6(pi=None, error: str = "") -> str:
 
 
 # ---------------------------------------------------------------------------
+# Сторінка /lab7 — Лабораторна №7 (закони Амдала, R_s, E_s)
+# ---------------------------------------------------------------------------
+def render_lab7(figure_id: int = None, N: int = None, n: int = None,
+                s: int = None, error: str = "") -> str:
+    if figure_id is None or figure_id not in L7.FIGURES:
+        figure_id = L7.DEFAULT_FIGURE
+    fig = L7.FIGURES[figure_id]
+
+    # Якщо не передали власні N, n, s — беремо з обраного рисунка
+    if N is None:
+        N = fig["N"]
+    if n is None:
+        n = fig["n"]
+    if s is None:
+        s = fig["q"]
+
+    try:
+        report = L7.compute(N=N, n=n, s=s)
+    except ValueError as exc:
+        report = L7.compute(N=fig["N"], n=fig["n"], s=fig["q"])
+        N, n, s = fig["N"], fig["n"], fig["q"]
+        error = error or f"Помилка у введених даних: {exc}. Показано дефолтні значення."
+
+    svg = L7.graph_svg(fig)
+
+    # ─── KPI: основний результат R_s та E_s ───
+    R_s = report["R_s"]
+    E_s = report["E_s"]
+    main_kpi = f"""
+    <div class="grid cols-3">
+      {T.stat("R_s — прискорення на " + str(s) + " проц.", f'×{R_s:.4f}')}
+      {T.stat("E_s — ефективність системи", f'{E_s*100:.2f}%')}
+      {T.stat("β — частка послідовних", f'{report["beta_str"]} ≈ {report["beta"]:.4f}')}
+    </div>
+    """
+
+    # ─── Картка для β ───
+    beta_card = f"""
+    <div class="grid cols-3">
+      {T.stat("N — всього операцій", N)}
+      {T.stat("n — послідовних",     n)}
+      {T.stat("N − n — паралельних", report["n_par"])}
+    </div>
+    <p class="muted" style="margin-top:12px">
+      <b>Формула</b>: β = n / N = <span class="kbd">{n}</span> /
+      <span class="kbd">{N}</span> = <span class="kbd">{report['beta_str']}</span>
+      ≈ <span class="kbd">{report['beta']:.4f}</span>.<br>
+      <b>Сенс</b>: яка частка алгоритму НЕ піддається розпаралелюванню. Чим
+      більша β, тим менший виграш від великої кількості процесорів.
+      У моєму варіанті β ≈ {report['beta']*100:.1f}%.
+    </p>
+    """
+
+    # ─── Картка для R_s (2-й закон) ───
+    Rs_card = f"""
+    <div class="grid cols-3">
+      {T.stat("R_s",                       f'×{R_s:.4f}')}
+      {T.stat("Знаменник β·s + (1−β)",     f'{report["beta"]*s + (1-report["beta"]):.4f}')}
+      {T.stat("Чисельник s",               s)}
+    </div>
+    <p class="muted" style="margin-top:12px">
+      <b>2-й закон Амдала</b>:
+      <br>R_s = s / (β·s + (1 − β)) =
+      <span class="kbd">{s}</span> /
+      ({report['beta_str']} · <span class="kbd">{s}</span> +
+      (1 − {report['beta_str']})) =
+      <span class="kbd">×{R_s:.4f}</span>.<br>
+      <b>Альтернативно</b>: R_s = T_seq / T_par = <span class="kbd">{N}</span>
+      / (n + (N−n)/s) = <span class="kbd">{N}</span> / (<span class="kbd">{n}</span>
+      + <span class="kbd">{report['n_par']}</span>/<span class="kbd">{s}</span>)
+      = <span class="kbd">{N}</span> / <span class="kbd">{report['T_par']:.4f}</span>
+      = <span class="kbd">×{R_s:.4f}</span>.<br>
+      <b>Сенс</b>: у скільки разів s процесорів швидші за один процесор.
+      У моєму варіанті — <b>×{R_s:.3f}</b>.
+    </p>
+    """
+
+    # ─── Картка для E_s ───
+    E_card = f"""
+    <div class="grid cols-3">
+      {T.stat("E_s",            f'{E_s*100:.2f}%')}
+      {T.stat("R_s",            f'×{R_s:.4f}')}
+      {T.stat("Процесорів s",   s)}
+    </div>
+    <p class="muted" style="margin-top:12px">
+      <b>Формула</b>: E_s = R_s / s = <span class="kbd">{R_s:.4f}</span> /
+      <span class="kbd">{s}</span> = <span class="kbd">{E_s:.4f}</span> ≈
+      <span class="kbd">{E_s*100:.2f}%</span>.<br>
+      <b>Сенс</b>: ефективність на один процесор. 100% = ідеально завантажений
+      процесор. У моєму варіанті E_{s} ≈ <b>{E_s*100:.1f}%</b> — кожен процесор
+      реально використовується тільки на цей відсоток часу.
+    </p>
+    """
+
+    # ─── 3-й закон Амдала ───
+    headroom = report["R_inf"] - R_s
+    pct_of_limit = (R_s / report["R_inf"]) * 100 if report["R_inf"] != float("inf") else 100.0
+    third_law_card = f"""
+    <div class="grid cols-3">
+      {T.stat("R_∞ ≤ 1/β",                f'×{report["R_inf"]:.4f}')}
+      {T.stat("Поточне R_s",              f'×{R_s:.4f}')}
+      {T.stat("Запас до межі",            f'×{headroom:.4f}')}
+    </div>
+    <p class="muted" style="margin-top:12px">
+      <b>3-й закон Амдала</b>: R_∞ ≤ 1/β = 1 / <span class="kbd">{report['beta_str']}</span>
+      = <span class="kbd">×{report['R_inf']:.4f}</span>.<br>
+      <b>Сенс</b>: навіть з нескінченною кількістю процесорів прискорення
+      обмежене зворотною величиною до частки послідовних обчислень.
+      У моєму варіанті теоретична межа — <b>×{report['R_inf']:.2f}</b>; поточне R_s
+      становить <b>{pct_of_limit:.1f}%</b> від цієї межі.
+    </p>
+    """
+
+    # ─── Таблиця R_s для різних s ───
+    s_values = [1, 2, 4, 8, 16, 32, fig["q"], fig["q"] * 2, 100, 1000]
+    s_values = sorted(set(s_values))
+    s_rows = []
+    for sv in s_values:
+        try:
+            r = L7.compute(N=N, n=n, s=sv)
+            highlight = '<b style="color:#4338ca">' if sv == s else ''
+            close = '</b>' if sv == s else ''
+            mark = ' ← поточне' if sv == s else (' ← s = q' if sv == fig["q"] and sv != s else '')
+            s_rows.append([
+                f'{highlight}{sv}{close}',
+                f'{highlight}×{r["R_s"]:.4f}{close}',
+                f'{highlight}{r["E_s"]*100:.2f}%{close}{mark}',
+            ])
+        except ValueError:
+            pass
+    s_table = T.table(
+        ["s (процесорів)",
+         "R_s (прискорення на s)",
+         "E_s (ефективність на 1 проц.), %"],
+        s_rows
+    )
+
+    # ─── Форма вибору рисунка та параметрів ───
+    figure_options_html = "".join(
+        f'<option value="{fid}"{" selected" if fid == figure_id else ""}>'
+        f'{f["title"]} (N={f["N"]}, n={f["n"]}, q={f["q"]})</option>'
+        for fid, f in L7.FIGURES.items()
+    )
+    form_html = f"""
+    <form method="POST" action="/lab7">
+      <label style="display:block;margin-bottom:10px">
+        <span class="muted" style="font-size:.85rem">Граф алгоритму (рисунок)</span><br>
+        <select name="figure" style="padding:8px 10px;font-size:.95rem;
+                                     border:1px solid #cbd5e1;border-radius:8px;
+                                     min-width:300px">
+          {figure_options_html}
+        </select>
+      </label>
+      <div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:8px">
+        <label style="display:flex;flex-direction:column;gap:2px;min-width:120px">
+          <span class="muted" style="font-size:.78rem">N — всього операцій</span>
+          <input type="number" name="N" min="1" value="{N}" required
+                 style="padding:6px 8px;font-size:.9rem">
+        </label>
+        <label style="display:flex;flex-direction:column;gap:2px;min-width:120px">
+          <span class="muted" style="font-size:.78rem">n — послідовних</span>
+          <input type="number" name="n" min="0" value="{n}" required
+                 style="padding:6px 8px;font-size:.9rem">
+        </label>
+        <label style="display:flex;flex-direction:column;gap:2px;min-width:120px">
+          <span class="muted" style="font-size:.78rem">s — процесорів</span>
+          <input type="number" name="s" min="1" value="{s}" required
+                 style="padding:6px 8px;font-size:.9rem">
+        </label>
+      </div>
+      <p class="muted" style="margin-top:8px;font-size:.82rem">
+        Підказка: при зміні рисунка значення N, n, q підставляються автоматично
+        з графа. s за замовчуванням = q (мінімальна кількість пристроїв для
+        досягнення R_max).
+      </p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn" type="submit" name="action" value="calc">
+          Розрахувати
+        </button>
+        <a class="btn secondary" href="/lab7">Скинути до варіанта 8</a>
+      </div>
+    </form>
+    """
+
+    err_html = T.alert(error, "warn") if error else ""
+
+    body = f"""
+{err_html}
+
+<div class="card">
+  <h2>Постановка задачі</h2>
+  <p class="lead">У системі з <b>s однакових простих універсальних процесорів</b>
+     (однакова продуктивність, можуть виконувати будь-які операції) реалізується
+     алгоритм. Алгоритм представлений у вигляді <b>паралельної форми</b> —
+     ярусно-паралельного графа, де:</p>
+  <ul style="margin-left:22px;line-height:1.8;color:#334155">
+    <li><b>m</b> — висота (кількість ярусів)</li>
+    <li><b>q</b> — ширина (макс. кількість операцій на одному ярусі)</li>
+    <li><b>N</b> — всього операцій у алгоритмі</li>
+    <li><b>n</b> — послідовних операцій (ті, що НЕ можуть йти паралельно)</li>
+    <li><b>β = n/N</b> — частка послідовних обчислень</li>
+  </ul>
+  <p>За варіантом 8 — використовуємо <b>рисунок №4</b> з PDF (за таблицею
+     варіантів). Можна обрати інший рисунок або задати власні N, n, s у формі
+     внизу.</p>
+</div>
+
+<div class="card">
+  <h2>9. Граф системи / алгоритму ({fig['title']})</h2>
+  <p class="lead">Кожен квадрат-вершина = одна операція. Стрілки — інформаційні
+     зв'язки (порядок виконання). Вузли в одному стовпчику = ярус (можуть
+     виконуватись паралельно). <b>Амбер</b> — послідовні (одинокі в ярусі),
+     <b>індиго</b> — паралельні. Цифра в кружечку — порядковий номер для
+     зручності.</p>
+  {svg}
+  <div class="grid cols-3" style="margin-top:14px">
+    {T.stat("N (всього операцій)",          fig["N"])}
+    {T.stat("n (послідовних)",              fig["n"])}
+    {T.stat("q (ширина = max паралельних)", fig["q"])}
+    {T.stat("m (висота = ярусів)",          fig["m"])}
+    {T.stat("β = n/N",                      f'{fig["n"]}/{fig["N"]} ≈ {fig["n"]/fig["N"]:.4f}')}
+    {T.stat("Мін. процесорів (=q)",         fig["q"])}
+  </div>
+</div>
+
+<div class="card" style="border-left:4px solid #4f46e5">
+  <h2>Підсумок · головний результат</h2>
+  {main_kpi}
+</div>
+
+<div class="card">
+  <h2>1. β — частка послідовних обчислень</h2>
+  {beta_card}
+</div>
+
+<div class="card" style="border-left:4px solid #4f46e5">
+  <h2>2. R_s — прискорення системи (2-й закон Амдала)</h2>
+  {Rs_card}
+</div>
+
+<div class="card" style="border-left:4px solid #4f46e5">
+  <h2>3. E_s — ефективність системи</h2>
+  {E_card}
+</div>
+
+<div class="card">
+  <h2>4. Теоретична межа · 3-й закон Амдала</h2>
+  {third_law_card}
+</div>
+
+<div class="card">
+  <h2>5. Як змінюється R_s та E_s від кількості процесорів s</h2>
+  <p class="lead">Поточне s = <b>{s}</b>. Спостерігаємо: R_s наближається до
+     1/β = ×{report['R_inf']:.2f}, але ніколи не перевищує її — навіть при
+     s → ∞. Натомість E_s падає, бо більшість процесорів простоює під час
+     послідовних операцій.</p>
+  {s_table}
+</div>
+
+<div class="card">
+  <h2>Завдання 3 · Інтерактивне введення даних</h2>
+  <p class="lead">Можна обрати інший рисунок з випадаючого списку — N, n, q
+     підставляться автоматично. Або ввести свої N, n, s.</p>
+  {form_html}
+</div>
+"""
+    return T.page("Лаб.7 · Амдал", body, active="home_l7",
+                  lab_num=7, tabs=T.LAB7_TABS)
+
+
+# ---------------------------------------------------------------------------
 # Допоміжні функції відповіді
 # ---------------------------------------------------------------------------
 def _send_html(handler: BaseHTTPRequestHandler, html: str, status: int = 200):
@@ -1456,6 +1769,8 @@ class handler(BaseHTTPRequestHandler):
                 _send_html(self, render_lab5()); return
             if path == "/lab6":
                 _send_html(self, render_lab6()); return
+            if path == "/lab7":
+                _send_html(self, render_lab7()); return
             if path == "/data":
                 _send_html(self, render_data()); return
             if path == "/distributed":
@@ -1510,6 +1825,14 @@ class handler(BaseHTTPRequestHandler):
                     _send_html(self, render_lab6(pi=pi))
                 except ValueError as exc:
                     _send_html(self, render_lab6(error=str(exc)))
+                return
+            if path == "/lab7":
+                params = parse_qs(raw)
+                try:
+                    fig_id, N, n, s = L7.parse_form(params)
+                    _send_html(self, render_lab7(figure_id=fig_id, N=N, n=n, s=s))
+                except ValueError as exc:
+                    _send_html(self, render_lab7(error=str(exc)))
                 return
             _send_html(self, _error_page("Метод POST для цього шляху не підтримується."), 405)
         except Exception as exc:  # pragma: no cover
