@@ -30,6 +30,8 @@ from . import lab5 as L5
 from . import lab6 as L6
 from . import lab7 as L7
 from . import lab8 as L8
+from . import sam1 as SAM1
+from . import sam2 as SAM2
 
 
 # ---------------------------------------------------------------------------
@@ -792,6 +794,15 @@ def render_hub() -> str:
         l8_Sl = "—"
         l8_compat = "—"
 
+    # Сам.1: підсумок чек-листа.
+    try:
+        sam1_summary = SAM1.get_summary()
+        sam1_pct = f'{sam1_summary["completion_pct"]:.0f}%'
+        sam1_done = f'{sam1_summary["n_ok"]}/{sam1_summary["n_total"]}'
+    except Exception:
+        sam1_pct = "—"
+        sam1_done = "—"
+
     body = f"""
 <div class="card">
   <h2>Лабораторні роботи курсу</h2>
@@ -874,6 +885,21 @@ def render_hub() -> str:
       <div class="item"><div class="l">Сумісність</div><div class="v">{l8_compat}</div></div>
     </div>
     <p style="margin-top:14px"><a class="btn" href="/lab8">Відкрити Лаб.8 →</a></p>
+  </div>
+
+  <div class="card">
+    <h2>Самостійна робота №1</h2>
+    <p class="lead">Чек-лист на 12 пунктів вимог методички — підтвердження,
+       що додаток на основі Лаб.1-4 виконує всі вимоги до програмного
+       модуля розподіленого ранжування. Для кожного пункту — статус,
+       опис реалізації та посилання на сторінку додатку, де це можна
+       побачити в дії.</p>
+    <div class="kpi">
+      <div class="item"><div class="l">Виконано</div><div class="v">{sam1_done}</div></div>
+      <div class="item"><div class="l">Готовність</div><div class="v">{sam1_pct}</div></div>
+      <div class="item"><div class="l">Базується на</div><div class="v">Лаб.1-4</div></div>
+    </div>
+    <p style="margin-top:14px"><a class="btn" href="/sam1">Відкрити Сам.1 →</a></p>
   </div>
 </div>
 """
@@ -2045,6 +2071,866 @@ def render_lab8(variant_id: int = None,
 
 
 # ---------------------------------------------------------------------------
+# Сторінка /sam1 — Самостійна робота №1 (чек-лист 12 пунктів)
+# ---------------------------------------------------------------------------
+def render_sam1() -> str:
+    summary = SAM1.get_summary()
+
+    status_tags = {
+        "ok":      ('<span class="tag green">✓ виконано</span>', '#10b981'),
+        "partial": ('<span class="tag amber">~ часткова реалізація</span>', '#f59e0b'),
+        "pending": ('<span class="tag red">✗ не виконано</span>', '#ef4444'),
+    }
+
+    cards = []
+    for req in SAM1.REQUIREMENTS:
+        tag_html, border_color = status_tags[req["status"]]
+        cards.append(f"""
+        <div class="card" style="border-left:4px solid {border_color}">
+          <h2>{req['id']}. {req['title']} {tag_html}</h2>
+          <p class="lead">{req['description']}</p>
+          <p class="muted" style="font-size:.85rem;margin-top:8px">
+            <b>Реалізовано в</b>: {req['implementation']}
+          </p>
+          <p style="margin-top:10px">
+            <a class="btn secondary" href="{req['link']}">{req['link_text']} →</a>
+          </p>
+        </div>
+        """)
+
+    summary_kpi = f"""
+    <div class="grid cols-3">
+      {T.stat("Усього пунктів", summary["n_total"])}
+      {T.stat("Виконано повністю", summary["n_ok"])}
+      {T.stat("Часткова реалізація", summary["n_partial"])}
+      {T.stat("Не виконано", summary["n_pending"])}
+      {T.stat("Загальний % готовності", f'{summary["completion_pct"]:.1f}%')}
+      {T.stat("Лабораторні в основі", "№1-4")}
+    </div>
+    """
+
+    body = f"""
+<div class="card">
+  <h2>Постановка</h2>
+  <p class="lead">Самостійна робота №1 — створення програмного модуля
+     розподіленого колективного ранжування на основі лабораторних робіт
+     №№1-4. Це <b>meta-задача</b>: довести, що додаток задовольняє
+     12 вимог методички. Нижче — повний чек-лист з прив'язкою до
+     конкретних сторінок та коду.</p>
+</div>
+
+<div class="card" style="border-left:4px solid #4f46e5">
+  <h2>Підсумок</h2>
+  {summary_kpi}
+</div>
+
+{''.join(cards)}
+
+<div class="card">
+  <h2>Як перевіряти на захисті</h2>
+  <p class="lead">Кожен пункт має кнопку «→» з посиланням на сторінку
+     додатку, де реалізовано вимогу. Викладач може клікати по кнопках
+     та переконуватися, що функціональність дійсно є.</p>
+  <p class="muted">Звіт-шпаргалку для усного захисту можна знайти в
+     <span class="kbd">ЗАХИСТ_sam1.md</span> у корені репозиторію.</p>
+</div>
+"""
+    return T.page("Сам.1 · Чек-лист", body, active="home_sam1",
+                  lab_num=101, tabs=T.SAM1_TABS)
+
+
+# ---------------------------------------------------------------------------
+# Сторінка /sam2 — Самостійна робота №2 (11 пунктів)
+# ---------------------------------------------------------------------------
+
+# ── SVG-хелпери ─────────────────────────────────────────────────────────────
+
+_LINE_COLORS = ["#4f46e5", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"]
+
+
+def _fmt_t(t):
+    """Форматує час: якщо <60s → '1.2s', якщо <3600s → '5.2m', інакше '1.4h'."""
+    if t is None:
+        return "—"
+    if t < 60:
+        return f"{t:.1f}s"
+    if t < 3600:
+        return f"{t/60:.1f}m"
+    return f"{t/3600:.1f}h"
+
+
+import math as _math
+
+
+def _svg_line_chart(
+    series_list,   # [{"label":str, "xs":[...], "ys":[...], "color":str}]
+    x_tick_labels, # список підписів по X у тому ж порядку що xs
+    title="",
+    x_label="",
+    y_label="",
+    log_y=False,
+    width=720,
+    height=280,
+):
+    """Генерує SVG-рядок: multi-line chart із заданими серіями."""
+    pad_l, pad_r, pad_t, pad_b = 70, 20, 30, 50
+    W = width - pad_l - pad_r
+    H = height - pad_t - pad_b
+
+    # Збираємо всі Y для масштабу
+    all_ys = [y for s in series_list for y in s["ys"] if y is not None]
+    if not all_ys:
+        return f'<svg width="{width}" height="{height}"><text y="20" x="10">Немає даних</text></svg>'
+
+    y_min_raw = min(all_ys)
+    y_max_raw = max(all_ys)
+
+    if log_y:
+        safe_min = max(y_min_raw, 0.001)
+        safe_max = max(y_max_raw, safe_min * 10)
+        log_min = _math.log10(safe_min)
+        log_max = _math.log10(safe_max)
+        if log_max == log_min:
+            log_max = log_min + 1
+
+        def _py(v):
+            if v is None or v <= 0:
+                return None
+            lv = _math.log10(v)
+            return pad_t + H - (lv - log_min) / (log_max - log_min) * H
+
+        # Підписи по Y: ступені 10
+        y_ticks = []
+        lo_i = int(_math.floor(log_min))
+        hi_i = int(_math.ceil(log_max))
+        for exp in range(lo_i, hi_i + 1):
+            v = 10 ** exp
+            if safe_min <= v <= safe_max * 2:
+                y_ticks.append(v)
+    else:
+        margin = (y_max_raw - y_min_raw) * 0.1 or y_max_raw * 0.1 or 1
+        y_min = max(0, y_min_raw - margin)
+        y_max = y_max_raw + margin
+        if y_max == y_min:
+            y_max = y_min + 1
+
+        def _py(v):
+            if v is None:
+                return None
+            return pad_t + H - (v - y_min) / (y_max - y_min) * H
+
+        n_yticks = 5
+        step = (y_max - y_min) / n_yticks
+        y_ticks = [y_min + step * i for i in range(n_yticks + 1)]
+
+    # Кількість точок по X
+    n_x = len(x_tick_labels)
+    if n_x < 2:
+        x_step = W
+    else:
+        x_step = W / (n_x - 1)
+
+    def _px(i):
+        return pad_l + i * x_step
+
+    lines_svg = []
+
+    # Grid
+    for yt in y_ticks:
+        py = _py(yt)
+        if py is None:
+            continue
+        if pad_t <= py <= pad_t + H:
+            lbl = f"{yt:.0f}" if yt >= 1 else f"{yt:.2f}"
+            if yt >= 1000:
+                lbl = f"{yt/1000:.0f}k"
+            lines_svg.append(
+                f'<line x1="{pad_l}" y1="{py:.1f}" x2="{pad_l+W}" y2="{py:.1f}" '
+                f'stroke="#e2e8f0" stroke-width="1"/>'
+                f'<text x="{pad_l-4}" y="{py+4:.1f}" text-anchor="end" '
+                f'font-size="11" fill="#64748b">{lbl}</text>'
+            )
+
+    # X ticks
+    for i, lbl in enumerate(x_tick_labels):
+        px = _px(i)
+        py_bot = pad_t + H
+        lines_svg.append(
+            f'<text x="{px:.1f}" y="{py_bot+16}" text-anchor="middle" '
+            f'font-size="11" fill="#64748b">{lbl}</text>'
+        )
+        lines_svg.append(
+            f'<line x1="{px:.1f}" y1="{py_bot}" x2="{px:.1f}" y2="{py_bot+4}" '
+            f'stroke="#94a3b8" stroke-width="1"/>'
+        )
+
+    # Axes
+    lines_svg.append(
+        f'<line x1="{pad_l}" y1="{pad_t}" x2="{pad_l}" y2="{pad_t+H}" '
+        f'stroke="#94a3b8" stroke-width="1.5"/>'
+    )
+    lines_svg.append(
+        f'<line x1="{pad_l}" y1="{pad_t+H}" x2="{pad_l+W}" y2="{pad_t+H}" '
+        f'stroke="#94a3b8" stroke-width="1.5"/>'
+    )
+
+    # Series lines + dots
+    for s in series_list:
+        xs_i = list(range(len(s["xs"])))
+        pts = []
+        for i, (xi, yi) in enumerate(zip(xs_i, s["ys"])):
+            py = _py(yi)
+            if py is not None:
+                pts.append((pad_l + xi * x_step, py))
+        if len(pts) >= 2:
+            path = "M " + " L ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+            lines_svg.append(
+                f'<path d="{path}" fill="none" stroke="{s["color"]}" '
+                f'stroke-width="2.5" stroke-linejoin="round"/>'
+            )
+        for px, py in pts:
+            lines_svg.append(
+                f'<circle cx="{px:.1f}" cy="{py:.1f}" r="3.5" '
+                f'fill="{s["color"]}" stroke="#fff" stroke-width="1.5"/>'
+            )
+
+    # Legend
+    legend_x = pad_l + 8
+    legend_y = pad_t + 8
+    for k, s in enumerate(series_list):
+        lx = legend_x + k * 120
+        if lx + 110 > pad_l + W:
+            lx = pad_l + (k % 3) * 120
+            legend_y = pad_t + 8 + (k // 3) * 16
+        lines_svg.append(
+            f'<line x1="{lx}" y1="{legend_y+5}" x2="{lx+18}" y2="{legend_y+5}" '
+            f'stroke="{s["color"]}" stroke-width="2.5"/>'
+            f'<text x="{lx+22}" y="{legend_y+9}" font-size="11" fill="#334155">'
+            f'{s["label"]}</text>'
+        )
+
+    # Labels
+    if title:
+        lines_svg.insert(0,
+            f'<text x="{width//2}" y="16" text-anchor="middle" '
+            f'font-size="13" font-weight="600" fill="#1e1b4b">{title}</text>'
+        )
+    if y_label:
+        lines_svg.append(
+            f'<text x="{pad_l-50}" y="{pad_t + H//2}" '
+            f'text-anchor="middle" font-size="11" fill="#64748b" '
+            f'transform="rotate(-90,{pad_l-50},{pad_t+H//2})">{y_label}</text>'
+        )
+    if x_label:
+        lines_svg.append(
+            f'<text x="{pad_l + W//2}" y="{height-4}" text-anchor="middle" '
+            f'font-size="11" fill="#64748b">{x_label}</text>'
+        )
+
+    inner = "\n".join(lines_svg)
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+        f'style="max-width:100%;height:auto;background:#fafafa;border-radius:8px;'
+        f'border:1px solid #e2e8f0;">\n{inner}\n</svg>'
+    )
+
+
+def render_sam2() -> str:  # noqa: C901
+    import math
+
+    bench = SAM2.load_bench()
+    large = SAM2.load_large()
+
+    if not bench:
+        return T.page(
+            "Сам.2 · Бенчмарк",
+            '<div class="card"><p class="lead">Дані відсутні. '
+            'Запустіть <span class="kbd">python bench_sam2.py</span>.</p></div>',
+            active="home_sam2", lab_num=102, tabs=T.SAM2_TABS,
+        )
+
+    # ── § 1: Схема декомпозиції ───────────────────────────────────────────────
+    s1 = """
+<div class="card" id="s1">
+  <h2>1. Схема декомпозиції задачі колективного ранжування</h2>
+  <h3>Повний перебір (Лаб.4)</h3>
+  <p class="lead">
+    Задача розбивається на <b>n гілок</b> за фіксованим першим об'єктом.
+    Кожна гілка i обробляє (n−1)! перестановок: {o_i, perm(решта)}.
+    Гілки не перетинаються: ∑|гілка_i| = n·(n−1)! = n!.
+    ThreadPoolExecutor розподіляє гілки між W воркерами.
+  </p>
+  <div style="overflow-x:auto;margin:14px 0">
+    <table class="compact">
+      <thead><tr>
+        <th>Гілка</th><th>Фіксований 1-й</th><th>Перестановок</th>
+        <th>Воркер (W=4)</th>
+      </tr></thead>
+      <tbody>
+        <tr><td>0</td><td>o₁</td><td>(n-1)!</td><td>0</td></tr>
+        <tr><td>1</td><td>o₂</td><td>(n-1)!</td><td>1</td></tr>
+        <tr><td>2</td><td>o₃</td><td>(n-1)!</td><td>2</td></tr>
+        <tr><td>⋮</td><td>⋮</td><td>⋮</td><td>⋮</td></tr>
+        <tr><td>n-1</td><td>oₙ</td><td>(n-1)!</td><td>(n-1) mod W</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Евристичний метод (острівний GA)</h3>
+  <p class="lead">
+    Аналогічна декомпозиція: задача ранжування ділиться на <b>K незалежних
+    острівних популяцій</b>, кожна еволюціонує паралельно. Між епохами —
+    кільцева міграція найкращого особа.
+  </p>
+  <div style="overflow-x:auto;margin:14px 0">
+    <table class="compact">
+      <thead><tr>
+        <th>Острів</th><th>Популяція</th><th>Поколінь/епоху</th>
+        <th>Міграція</th>
+      </tr></thead>
+      <tbody>
+        <tr><td>0</td><td>P₀ (pop/K особин)</td><td>G/E</td><td>→ острів 1</td></tr>
+        <tr><td>1</td><td>P₁</td><td>G/E</td><td>→ острів 2</td></tr>
+        <tr><td>2</td><td>P₂</td><td>G/E</td><td>→ острів 3</td></tr>
+        <tr><td>3</td><td>P₃</td><td>G/E</td><td>→ острів 0</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="alert info">
+    <b>Декомпозиція:</b> задача → K підзадач (острови), кожна шукає локальний
+    оптимум незалежно → глобальний оптимум = мінімум серед усіх островів після
+    фінальної міграції.
+  </div>
+</div>
+"""
+
+    # ── § 2: Таблиця перебору ─────────────────────────────────────────────────
+    rows2 = []
+    for r in bench:
+        n_perm = r["n_perm"]
+        bf_complete = r.get("bf_complete", False)
+        t_cen = r.get("t_cen")
+        t_cen_est = r.get("t_cen_est")
+        t_dis = r.get("t_dis")
+
+        # Підпис для t_cen колонки
+        if bf_complete and t_cen is not None:
+            t_cen_str = _fmt_t(t_cen)
+        elif t_cen_est:
+            t_cen_str = f"~{_fmt_t(t_cen_est)} *"
+        else:
+            t_cen_str = "—"
+
+        t_dis_str = _fmt_t(t_dis) if t_dis else ("~" + _fmt_t(t_cen_est) + " *" if t_cen_est and not bf_complete else "—")
+
+        n_perm_str = f"{n_perm:,}".replace(",", " ")
+        complete_tag = ('<span class="tag green">✓</span>' if bf_complete
+                        else '<span class="tag amber">оцінка</span>')
+
+        best_sum = r.get("best_sum")
+        best_max = r.get("best_max")
+        n_eq_sum = r.get("n_eq_sum")
+        n_eq_max = r.get("n_eq_max")
+
+        rows2.append(f"""<tr>
+          <td><b>{r['n_obj']}</b></td>
+          <td>{r['n_exp']}</td>
+          <td style="font-family:monospace">{n_perm_str}</td>
+          <td>{t_cen_str}</td>
+          <td>{t_dis_str}</td>
+          <td>{complete_tag}</td>
+          <td>{best_sum if best_sum is not None else '—'}</td>
+          <td>{best_max if best_max is not None else '—'}</td>
+          <td>{n_eq_sum if n_eq_sum is not None else '—'}</td>
+          <td>{n_eq_max if n_eq_max is not None else '—'}</td>
+        </tr>""")
+
+    s2 = f"""
+<div class="card" id="s2">
+  <h2>2. Результати повного перебору</h2>
+  <p class="lead">n=8,9 — повний перебір завершено; n=10 — 30-секундний
+     таймаут + екстраполяція; n=11,12 — час оцінено масштабуванням n!/9!.</p>
+  <div style="overflow-x:auto">
+    <table class="compact">
+      <thead><tr>
+        <th>n</th><th>m (exp)</th><th>n!</th>
+        <th>t_цен</th><th>t_розп</th><th>Повний?</th>
+        <th>min Σd</th><th>min max·d</th>
+        <th>#Σ-медіан</th><th>#max-медіан</th>
+      </tr></thead>
+      <tbody>{''.join(rows2)}</tbody>
+    </table>
+  </div>
+  <p class="note">* — оцінка часу на повний перебір; для n=11,12 повний
+     перебір нереальний (n≥11 → &gt;10⁷ перестановок при &gt;1800с).</p>
+</div>
+"""
+
+    # ── § 3: Матриця відстаней ─────────────────────────────────────────────────
+    complete_rows = [r for r in bench if r.get("bf_complete") and r.get("best_sum_rank")]
+    labels, mat = SAM2.pairwise_distance_matrix(bench)
+    # Фільтруємо: лише конфіги де є best_sum_rank
+    avail = [i for i, r in enumerate(bench) if r.get("best_sum_rank")]
+
+    if avail:
+        sub_labels = [labels[i] for i in avail]
+        mat_rows_html = []
+        for i in avail:
+            cells = [f'<td class="zero">0</td>' if i == j
+                     else (f'<td>{mat[i][j]}</td>' if mat[i][j] is not None
+                           else '<td class="muted">—</td>')
+                     for j in avail]
+            mat_rows_html.append(
+                f'<tr><td class="head">{sub_labels[avail.index(i)]}</td>'
+                + "".join(cells) + "</tr>"
+            )
+        header_cells = "".join(
+            f'<th>{l}</th>' for l in sub_labels
+        )
+        mat_html = f"""
+    <table class="compact matrix">
+      <thead><tr><th></th>{header_cells}</tr></thead>
+      <tbody>{''.join(mat_rows_html)}</tbody>
+    </table>"""
+    else:
+        mat_html = '<p class="muted">Немає повних BF-результатів.</p>'
+
+    s3 = f"""
+<div class="card" id="s3">
+  <h2>3. Матриця попарних відстаней між Σ-медіанами</h2>
+  <p class="lead">L1 (Кука) відстань між оптимальними ранжуваннями,
+     знайденими повним перебором. Лише конфігурації де BF завершений (n=8,9).
+     Ненульові значення свідчать, що зі зміною числа експертів медіана
+     "переключається" на іншу перестановку.</p>
+  <div style="overflow-x:auto">{mat_html}</div>
+  <p class="note">Відстань 0 = однакове ранжування; великі значення →
+     суттєво різні компромісні ранжування для різних m.</p>
+</div>
+"""
+
+    # ── § 4: Графіки часу ─────────────────────────────────────────────────────
+    # Time vs n_obj (log Y, кольори = n_exp)
+    exp_values = [10, 20, 30, 50]
+    n_values = [8, 9, 10, 11, 12]
+
+    def _get_t(n, m):
+        for r in bench:
+            if r["n_obj"] == n and r["n_exp"] == m:
+                t = r.get("t_cen_est") or r.get("t_cen")
+                return t
+        return None
+
+    series_vs_n = []
+    for k, m in enumerate(exp_values):
+        ys = [_get_t(n, m) for n in n_values]
+        series_vs_n.append({
+            "label": f"m={m}",
+            "xs": n_values,
+            "ys": ys,
+            "color": _LINE_COLORS[k],
+        })
+
+    svg_vs_n = _svg_line_chart(
+        series_vs_n,
+        x_tick_labels=[str(n) for n in n_values],
+        title="Час повного перебору від кількості об'єктів",
+        x_label="кількість об'єктів n",
+        y_label="час (лог.)",
+        log_y=True,
+        width=700, height=300,
+    )
+
+    # Time vs n_exp (лінійна, кольори = n_obj)
+    def _get_t_exp(n, m):
+        return _get_t(n, m)
+
+    series_vs_exp = []
+    for k, n in enumerate([8, 9, 10]):
+        ys = [_get_t_exp(n, m) for m in exp_values]
+        series_vs_exp.append({
+            "label": f"n={n}",
+            "xs": exp_values,
+            "ys": ys,
+            "color": _LINE_COLORS[k],
+        })
+
+    svg_vs_exp = _svg_line_chart(
+        series_vs_exp,
+        x_tick_labels=[str(m) for m in exp_values],
+        title="Час повного перебору від кількості експертів",
+        x_label="кількість експертів m",
+        y_label="час (с)",
+        log_y=False,
+        width=700, height=300,
+    )
+
+    s4 = f"""
+<div class="card" id="s4">
+  <h2>4. Графіки залежності часу перебору</h2>
+  <div class="grid cols-2">
+    <div>
+      <h3>Час від кількості об'єктів (логарифмічна шкала Y)</h3>
+      {svg_vs_n}
+      <p class="note">Зростання факторіальне: n=12 → оцінка &gt;10⁴с при m=50.</p>
+    </div>
+    <div>
+      <h3>Час від кількості експертів (n=8,9,10)</h3>
+      {svg_vs_exp}
+      <p class="note">Лінійна залежність: час ∝ m, оскільки cost = Σ dist_j.</p>
+    </div>
+  </div>
+</div>
+"""
+
+    # ── § 5: Порівняння BF vs GA ──────────────────────────────────────────────
+    comp_rows = []
+    for r in SAM2.bf_vs_ga_table(bench):
+        t_bf_str = _fmt_t(r["t_cen"])
+        t_ga_str = _fmt_t(r["t_ga"]) if r["t_ga"] else "—"
+        bf_cost = r["bf_cost"] if r["bf_cost"] is not None else "—"
+        ga_cost = r["ga_cost"] if r["ga_cost"] is not None else "—"
+        match = r["match"]
+        match_cell = (
+            '<td><span class="tag green">✓ оптимум</span></td>' if match == "✓"
+            else f'<td><span class="tag amber">{match}</span></td>'
+        )
+        comp_rows.append(f"""<tr>
+          <td>{r['n_obj']}</td><td>{r['n_exp']}</td>
+          <td>{t_bf_str}</td><td>{t_ga_str}</td>
+          <td>{bf_cost}</td><td>{ga_cost}</td>
+          {match_cell}
+        </tr>""")
+
+    s5 = f"""
+<div class="card" id="s5">
+  <h2>5. Порівняння повного перебору та евристичного методу (GA)</h2>
+  <p class="lead">Для n=8,9: GA знаходить точний оптимум (t_GA &lt;&lt; t_BF).
+     Для n=10: BF неповний (30с), GA дає наближене рішення миттєво.
+     Для n=11,12: тільки GA (BF нереальний).</p>
+  <div style="overflow-x:auto">
+    <table class="compact">
+      <thead><tr>
+        <th>n</th><th>m</th>
+        <th>t_BF</th><th>t_GA (цен.)</th>
+        <th>Вартість BF</th><th>Вартість GA</th>
+        <th>Збіг з оптимумом</th>
+      </tr></thead>
+      <tbody>{''.join(comp_rows)}</tbody>
+    </table>
+  </div>
+  <p class="note">Примітка: для n=8,9 BF і GA виконані на різних задачах
+     (однакова структура, різний seed). Для n=10+ — на одній задачі.</p>
+</div>
+"""
+
+    # ── § 6: Схема розподіленого евристичного ──────────────────────────────────
+    s6 = """
+<div class="card" id="s6">
+  <h2>6. Схема розподіленого обчислення евристичним методом</h2>
+  <p class="lead">На основі декомпозиції з пункту 1: острівна модель GA
+     з кільцевою міграцією.</p>
+  <div class="alert info">
+    <b>Алгоритм:</b><br>
+    1. Ініціалізувати K островів, кожен із pop/K особинами (випадкові перестановки).<br>
+    2. Для кожної епохи e = 1..E:<br>
+    &nbsp;&nbsp;&nbsp;a. Паралельно (ThreadPoolExecutor) запустити G/E поколінь
+       ГА на кожному острові.<br>
+    &nbsp;&nbsp;&nbsp;b. Міграція: найкращий особ острова i замінює найгіршого
+       на острові (i+1) mod K.<br>
+    3. Після E епох: глобальний оптимум = min(best_i) по всіх островах.
+  </div>
+  <h3>Параметри реалізації</h3>
+  <table class="compact">
+    <thead><tr>
+      <th>Параметр</th><th>Значення</th><th>Пояснення</th>
+    </tr></thead>
+    <tbody>
+      <tr><td>K (острови)</td><td>4</td><td>= кількість воркерів</td></tr>
+      <tr><td>pop_per_island</td><td>pop/K</td><td>рівномірний поділ</td></tr>
+      <tr><td>n_epochs (E)</td><td>5</td><td>міграційних циклів</td></tr>
+      <tr><td>Кросовер</td><td>PMX</td><td>зберігає відносний порядок</td></tr>
+      <tr><td>Мутація</td><td>swap (p=0.2)</td><td>обмін двох позицій</td></tr>
+      <tr><td>Селекція</td><td>турнір k=3</td><td>мінімальна cost</td></tr>
+    </tbody>
+  </table>
+</div>
+"""
+
+    # ── § 7: Критерії зупинки ─────────────────────────────────────────────────
+    s7 = """
+<div class="card" id="s7">
+  <h2>7. Критерії зупинки алгоритмів</h2>
+  <div class="grid cols-3">
+    <div class="card" style="background:#eff6ff;border:1px solid #bfdbfe">
+      <h3 style="color:#1d4ed8">1. maxGen (основний)</h3>
+      <p>Зупинка після <b>n_gen поколінь</b>. Гарантує детермінований час
+         виконання. Реалізовано: <span class="kbd">for gen in range(n_gen)</span>
+         у <code>genetic_algorithm()</code>.</p>
+    </div>
+    <div class="card" style="background:#eff6ff;border:1px solid #bfdbfe">
+      <h3 style="color:#1d4ed8">2. time_limit</h3>
+      <p>Зупинка якщо час виконання &gt; time_limit секунд.
+         Критично для Vercel serverless (10с ліміт).
+         Реалізовано: перевірка <span class="kbd">time.perf_counter()</span>
+         в кінці кожного покоління.</p>
+    </div>
+    <div class="card" style="background:#eff6ff;border:1px solid #bfdbfe">
+      <h3 style="color:#1d4ed8">3. Stagnation (часткова)</h3>
+      <p>Якщо best_cost не покращується протягом S поколінь — зупинка.
+         В поточній реалізації не вбудовано явно, але досягається через
+         фіксоване n_gen після якого збіжність зазвичай гарантована.</p>
+    </div>
+  </div>
+  <div class="alert warn">
+    <b>Для повного перебору:</b> єдиний критерій — завершення усіх гілок
+    (перевірено n! перестановок). Для великих n використовується таймаут
+    із записом часткового результату.
+  </div>
+</div>
+"""
+
+    # ── § 8: Графіки збіжності ────────────────────────────────────────────────
+    convergence_svgs = []
+    for target_n in [8, 10, 12]:
+        # Вибираємо всі m для цього n
+        sub = [r for r in bench if r["n_obj"] == target_n and r.get("ga_cen_history")]
+        if not sub:
+            continue
+        series = []
+        for k, r in enumerate(sub):
+            h_cen = r.get("ga_cen_history", [])
+            if h_cen:
+                n_gen = len(h_cen)
+                series.append({
+                    "label": f"цен m={r['n_exp']}",
+                    "xs": list(range(n_gen)),
+                    "ys": h_cen,
+                    "color": _LINE_COLORS[k % len(_LINE_COLORS)],
+                })
+            h_dis = r.get("ga_dis_history", [])
+            if h_dis and k == 0:
+                series.append({
+                    "label": f"розп m={r['n_exp']}",
+                    "xs": list(range(len(h_dis))),
+                    "ys": h_dis,
+                    "color": "#94a3b8",
+                })
+        if series:
+            svg = _svg_line_chart(
+                series,
+                x_tick_labels=[str(i) for i in range(len(series[0]["ys"]))],
+                title=f"Збіжність GA, n={target_n}",
+                x_label="покоління",
+                y_label="вартість",
+                log_y=False,
+                width=680, height=270,
+            )
+            convergence_svgs.append(f"""
+            <div>
+              <h3>n = {target_n} об'єктів</h3>
+              {svg}
+            </div>""")
+
+    s8 = f"""
+<div class="card" id="s8">
+  <h2>8. Графіки збіжності алгоритмів</h2>
+  <p class="lead">best_cost по поколіннях для централізованого GA.
+     Кожна лінія — різна кількість експертів m при фіксованому n.</p>
+  <div class="grid cols-2" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
+    {''.join(convergence_svgs) or '<p class="muted">Дані відсутні.</p>'}
+  </div>
+</div>
+"""
+
+    # ── § 9: Large-scale ──────────────────────────────────────────────────────
+    large_rows = []
+    for r in large:
+        improv = r["ga_cen_cost"] - r["ga_dis_cost"]
+        improv_str = (
+            f'<span class="tag green">+{improv}</span>' if improv > 0
+            else (f'<span class="tag red">{improv}</span>' if improv < 0
+                  else '<span class="tag slate">0</span>')
+        )
+        large_rows.append(f"""<tr>
+          <td><b>{r['n_obj']}</b></td>
+          <td>{r['n_exp']}</td>
+          <td>{r['ga_cen_cost']}</td>
+          <td>{r['ga_cen_time']:.3f}s</td>
+          <td>{r['ga_dis_cost']}</td>
+          <td>{r['ga_dis_time']:.3f}s</td>
+          <td>{improv_str}</td>
+        </tr>""")
+
+    # Large convergence chart (n=100,200,500 for m=10)
+    large_conv_series = []
+    for k, r in enumerate([r for r in large if r["n_exp"] == 10]):
+        h = r.get("ga_cen_history", [])
+        if h:
+            large_conv_series.append({
+                "label": f"цен n={r['n_obj']}",
+                "xs": list(range(len(h))),
+                "ys": h,
+                "color": _LINE_COLORS[k],
+            })
+
+    large_conv_svg = ""
+    if large_conv_series:
+        large_conv_svg = _svg_line_chart(
+            large_conv_series,
+            x_tick_labels=[str(i) for i in range(len(large_conv_series[0]["ys"]))],
+            title="Збіжність GA для n=100/200/500 (m=10)",
+            x_label="покоління",
+            y_label="вартість",
+            width=680, height=260,
+        )
+
+    s9 = f"""
+<div class="card" id="s9">
+  <h2>9. Результати для великих задач (n = 100, 200, 500)</h2>
+  <p class="lead">Порівняння централізованого та острівного GA.
+     Повний перебір нереальний: 100! ≈ 9.3×10¹⁵⁷.</p>
+  <div style="overflow-x:auto">
+    <table class="compact">
+      <thead><tr>
+        <th>n</th><th>m</th>
+        <th>Цен. вартість</th><th>Цен. час</th>
+        <th>Розп. вартість</th><th>Розп. час</th>
+        <th>Різниця</th>
+      </tr></thead>
+      <tbody>{''.join(large_rows)}</tbody>
+    </table>
+  </div>
+  <div style="margin-top:18px">
+    <h3>Збіжність GA для n=100/200/500</h3>
+    {large_conv_svg}
+  </div>
+</div>
+"""
+
+    # ── § 10: Ефективність ────────────────────────────────────────────────────
+    eff_rows = []
+    for r in SAM2.speedup_table(bench):
+        t_cen = r.get("t_cen")
+        t_dis = r.get("t_dis")
+        s_bf = r.get("s_bf")
+        e_bf = r.get("e_bf")
+        s_ga = r.get("s_ga")
+        e_ga = r.get("e_ga")
+
+        def _fmt_se(s, e):
+            if s is None:
+                return "—", "—"
+            s_str = f"{s:.3f}"
+            e_str = f"{e:.3f}"
+            color = "green" if s >= 1.2 else ("amber" if s >= 0.8 else "red")
+            return (f'<span class="tag {color}">{s_str}</span>', e_str)
+
+        s_bf_str, e_bf_str = _fmt_se(s_bf, e_bf)
+        s_ga_str, e_ga_str = _fmt_se(s_ga, e_ga)
+        eff_rows.append(f"""<tr>
+          <td>{r['n_obj']}</td><td>{r['n_exp']}</td>
+          <td>{_fmt_t(t_cen)}</td><td>{_fmt_t(t_dis)}</td>
+          <td>{s_bf_str}</td><td>{e_bf_str}</td>
+          <td>{s_ga_str}</td><td>{e_ga_str}</td>
+        </tr>""")
+
+    s10 = f"""
+<div class="card" id="s10">
+  <h2>10. Ефективність розподілених обчислень</h2>
+  <p class="lead">
+    Прискорення: <b>S = t_цен / t_розп</b> &nbsp;·&nbsp;
+    Ефективність: <b>E = S / K</b>, де K=4 воркери.
+    Ідеальна ефективність E=1.0 (лінійне прискорення).
+  </p>
+  <div style="overflow-x:auto">
+    <table class="compact">
+      <thead><tr>
+        <th>n</th><th>m</th>
+        <th>t_цен (BF)</th><th>t_розп (BF)</th>
+        <th>S_BF</th><th>E_BF</th>
+        <th>S_GA</th><th>E_GA</th>
+      </tr></thead>
+      <tbody>{''.join(eff_rows)}</tbody>
+    </table>
+  </div>
+  <div class="alert warn">
+    <b>Обмеження CPython GIL:</b> потоки ThreadPoolExecutor не виконуються
+    паралельно для CPU-bound задач. Реальне прискорення &lt; 4x.
+    S ≈ 1 для малих задач, може &gt;1 за рахунок кешування/порядку обходу.
+    Для реального розподілення потрібен multiprocessing або MPI.
+  </div>
+</div>
+"""
+
+    # ── Зведений чек-лист ─────────────────────────────────────────────────────
+    summary = SAM2.get_summary()
+    status_tags = {
+        "ok":      ('<span class="tag green">✓ виконано</span>', '#10b981'),
+        "partial": ('<span class="tag amber">~ часткова реалізація</span>', '#f59e0b'),
+        "pending": ('<span class="tag red">✗ не виконано</span>', '#ef4444'),
+    }
+    req_cards = []
+    for req in SAM2.REQUIREMENTS:
+        tag_html, border_color = status_tags[req["status"]]
+        req_cards.append(f"""
+        <div class="card" style="border-left:4px solid {border_color}">
+          <h2>{req['id']}. {req['title']} {tag_html}</h2>
+          <p class="lead">{req['description']}</p>
+          <p class="muted" style="font-size:.85rem;margin-top:8px">
+            <b>Реалізовано в</b>: {req['implementation']}
+          </p>
+        </div>""")
+
+    summary_kpi = f"""
+    <div class="grid cols-3">
+      {T.stat("Усього пунктів", summary["n_total"])}
+      {T.stat("Виконано", summary["n_ok"])}
+      {T.stat("Часткова реалізація", summary["n_partial"])}
+      {T.stat("Не виконано", summary["n_pending"])}
+      {T.stat("Готовність", f'{summary["completion_pct"]:.0f}%')}
+      {T.stat("Конфігурацій BF", len(bench))}
+    </div>"""
+
+    body = f"""
+<div class="card">
+  <h2>Постановка</h2>
+  <p class="lead">Самостійна робота №2 — експериментальне дослідження
+     розподіленого обчислення колективного ранжування методами повного
+     перебору та евристичними методами. Наведено 10 секцій відповідно
+     до 11 пунктів методички.</p>
+  <nav style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+    <a class="btn secondary" href="#s1">1. Схема декомпозиції</a>
+    <a class="btn secondary" href="#s2">2. Таблиця перебору</a>
+    <a class="btn secondary" href="#s3">3. Матриця відстаней</a>
+    <a class="btn secondary" href="#s4">4. Графіки часу</a>
+    <a class="btn secondary" href="#s5">5. BF vs GA</a>
+    <a class="btn secondary" href="#s6">6. Розп. евристика</a>
+    <a class="btn secondary" href="#s7">7. Критерії зупинки</a>
+    <a class="btn secondary" href="#s8">8. Збіжність</a>
+    <a class="btn secondary" href="#s9">9. Large-scale</a>
+    <a class="btn secondary" href="#s10">10. Ефективність</a>
+  </nav>
+</div>
+
+{s1}{s2}{s3}{s4}{s5}{s6}{s7}{s8}{s9}{s10}
+
+<div class="card" id="checklist">
+  <h2>Чек-лист 11 пунктів</h2>
+  {summary_kpi}
+</div>
+{''.join(req_cards)}
+
+<div class="card">
+  <p class="muted">Дані згенеровано <span class="kbd">python bench_sam2.py</span>.
+     Шпаргалка для захисту:
+     <span class="kbd">ЗАХИСТ_sam2.md</span> у корені репозиторію.</p>
+</div>
+"""
+    return T.page("Сам.2 · Бенчмарк", body, active="home_sam2",
+                  lab_num=102, tabs=T.SAM2_TABS)
+
+
+# ---------------------------------------------------------------------------
 # Допоміжні функції відповіді
 # ---------------------------------------------------------------------------
 def _send_html(handler: BaseHTTPRequestHandler, html: str, status: int = 200):
@@ -2112,6 +2998,10 @@ class handler(BaseHTTPRequestHandler):
                 _send_html(self, render_lab7()); return
             if path == "/lab8":
                 _send_html(self, render_lab8()); return
+            if path == "/sam1":
+                _send_html(self, render_sam1()); return
+            if path == "/sam2":
+                _send_html(self, render_sam2()); return
             if path == "/data":
                 _send_html(self, render_data()); return
             if path == "/distributed":

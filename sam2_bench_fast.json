@@ -1,0 +1,174 @@
+[
+  {
+    "n_obj": 8,
+    "n_exp": 10,
+    "n_perm": 40320,
+    "t_cen": 1.6616,
+    "t_dis": 1.9892,
+    "best_sum": 64,
+    "best_max": 9,
+    "n_eq_sum": 4,
+    "n_eq_max": 10,
+    "best_sum_rank": [
+      "o8",
+      "o7",
+      "o2",
+      "o1",
+      "o6",
+      "o3",
+      "o4",
+      "o5"
+    ]
+  },
+  {
+    "n_obj": 8,
+    "n_exp": 20,
+    "n_perm": 40320,
+    "t_cen": 3.893,
+    "t_dis": 3.333,
+    "best_sum": 124,
+    "best_max": 9,
+    "n_eq_sum": 3,
+    "n_eq_max": 5,
+    "best_sum_rank": [
+      "o8",
+      "o1",
+      "o2",
+      "o3",
+      "o7",
+      "o5",
+      "o4",
+      "o6"
+    ]
+  },
+  {
+    "n_obj": 8,
+    "n_exp": 30,
+    "n_perm": 40320,
+    "t_cen": 5.1446,
+    "t_dis": 4.9359,
+    "best_sum": 202,
+    "best_max": 10,
+    "n_eq_sum": 2,
+    "n_eq_max": 1,
+    "best_sum_rank": [
+      "o5",
+      "o1",
+      "o8",
+      "o6",
+      "o2",
+      "o7",
+      "o3",
+      "o4"
+    ]
+  },
+  {
+    "n_obj": 8,
+    "n_exp": 50,
+    "n_perm": 40320,
+    "t_cen": 8.6149,
+    "t_dis": 8.4295,
+    "best_sum": 363,
+    "best_max": 11,
+    "n_eq_sum": 1,
+    "n_eq_max": 6,
+    "best_sum_rank": [
+      "o2",
+      "o3",
+      "o7",
+      "o5",
+      "o1",
+      "o8",
+      "o4",
+      "o6"
+    ]
+  },
+  {
+    "n_obj": 9,
+    "n_exp": 10,
+    "n_perm": 362880,
+    "t_cen": 16.7294,
+    "t_dis": 17.2064,
+    "best_sum": 76,
+    "best_max": 10,
+    "n_eq_sum": 24,
+    "n_eq_max": 12,
+    "best_sum_rank": [
+      "o6",
+      "o2",
+      "o3",
+      "o5",
+      "o1",
+      "o4",
+      "o7",
+      "o8",
+      "o9"
+    ]
+  },
+  {
+    "n_obj": 9,
+    "n_exp": 20,
+    "n_perm": 362880,
+    "t_cen": 33.888,
+    "t_dis": 31.032,
+    "best_sum": 158,
+    "best_max": 11,
+    "n_eq_sum": 4,
+    "n_eq_max": 9,
+    "best_sum_rank": [
+      "o9",
+      "o4",
+      "o1",
+      "o5",
+      "o6",
+      "o8",
+      "o7",
+      "o2",
+      "o3"
+    ]
+  },
+  {
+    "n_obj": 9,
+    "n_exp": 30,
+    "n_perm": 362880,
+    "t_cen": 55.4051,
+    "t_dis": 39.8203,
+    "best_sum": 238,
+    "best_max": 12,
+    "n_eq_sum": 10,
+    "n_eq_max": 1,
+    "best_sum_rank": [
+      "o3",
+      "o8",
+      "o5",
+      "o6",
+      "o9",
+      "o2",
+      "o4",
+      "o7",
+      "o1"
+    ]
+  },
+  {
+    "n_obj": 9,
+    "n_exp": 50,
+    "n_perm": 362880,
+    "t_cen": 86.6187,
+    "t_dis": 126.0627,
+    "best_sum": 433,
+    "best_max": 13,
+    "n_eq_sum": 8,
+    "n_eq_max": 29,
+    "best_sum_rank": [
+      "o3",
+      "o5",
+      "o8",
+      "o4",
+      "o9",
+      "o2",
+      "o7",
+      "o1",
+      "o6"
+    ]
+  }
+]
