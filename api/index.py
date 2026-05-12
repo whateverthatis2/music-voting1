@@ -29,6 +29,7 @@ from . import lab4 as L4
 from . import lab5 as L5
 from . import lab6 as L6
 from . import lab7 as L7
+from . import lab8 as L8
 
 
 # ---------------------------------------------------------------------------
@@ -778,6 +779,19 @@ def render_hub() -> str:
         l7_E = "—"
         l7_beta = "—"
 
+    # Лаб.8: розрахунок S_l для варіанта 8.
+    try:
+        v8 = L8.VARIANTS[L8.DEFAULT_VARIANT]
+        l8_report = L8.compute(v8["parallel_share"], v8["l"], v8["a1"], v8["a2"])
+        l8_Smax = f'{l8_report["S_max"]:.2f}'
+        l8_Sl = f'×{l8_report["S_l"]:.2f}'
+        l8_compat = ('сумісно' if l8_report["is_compatible"]
+                     else 'несумісно')
+    except Exception:
+        l8_Smax = "—"
+        l8_Sl = "—"
+        l8_compat = "—"
+
     body = f"""
 <div class="card">
   <h2>Лабораторні роботи курсу</h2>
@@ -845,6 +859,21 @@ def render_hub() -> str:
       <div class="item"><div class="l">Ефективність E_s</div><div class="v">{l7_E}</div></div>
     </div>
     <p style="margin-top:14px"><a class="btn" href="/lab7">Відкрити Лаб.7 →</a></p>
+  </div>
+
+  <div class="card">
+    <h2>Лабораторна №8</h2>
+    <p class="lead">Числова задача (без графа): задано частку паралельних
+       обчислень (1−β), кількість процесорів l і потрібний діапазон
+       a₁–a₂ % від максимально можливого прискорення. Знайти S_l (2-й
+       закон Амдала), S_max = 1/β (3-й закон), визначити сумісність та
+       мінімальну/максимальну кількість процесорів.</p>
+    <div class="kpi">
+      <div class="item"><div class="l">S_max (3-й закон)</div><div class="v">{l8_Smax}</div></div>
+      <div class="item"><div class="l">S_l (2-й закон)</div><div class="v">{l8_Sl}</div></div>
+      <div class="item"><div class="l">Сумісність</div><div class="v">{l8_compat}</div></div>
+    </div>
+    <p style="margin-top:14px"><a class="btn" href="/lab8">Відкрити Лаб.8 →</a></p>
   </div>
 </div>
 """
@@ -1706,6 +1735,316 @@ def render_lab7(figure_id: int = None, N: int = None, n: int = None,
 
 
 # ---------------------------------------------------------------------------
+# Сторінка /lab8 — Лабораторна №8 (макс. прискорення, закони Амдала 2 і 3)
+# ---------------------------------------------------------------------------
+def render_lab8(variant_id: int = None,
+                parallel_share: float = None,
+                l: int = None,
+                a1: float = None, a2: float = None,
+                error: str = "") -> str:
+    if variant_id is None or variant_id not in L8.VARIANTS:
+        variant_id = L8.DEFAULT_VARIANT
+    v = L8.VARIANTS[variant_id]
+
+    if parallel_share is None:
+        parallel_share = v["parallel_share"]
+    if l is None:
+        l = v["l"]
+    if a1 is None:
+        a1 = v["a1"]
+    if a2 is None:
+        a2 = v["a2"]
+
+    try:
+        report = L8.compute(parallel_share, l, a1, a2)
+    except ValueError as exc:
+        report = L8.compute(v["parallel_share"], v["l"], v["a1"], v["a2"])
+        parallel_share, l, a1, a2 = v["parallel_share"], v["l"], v["a1"], v["a2"]
+        error = error or f"Помилка у введених даних: {exc}. Показано дефолтні значення."
+
+    plot = L8.plot_svg(report)
+
+    # ─── KPI основних метрик ───
+    main_kpi = f"""
+    <div class="grid cols-3">
+      {T.stat("S_max — 3-й закон Амдала",  f'×{report["S_max"]:.4f}')}
+      {T.stat("S_l — 2-й закон (l = " + str(l) + ")",
+              f'×{report["S_l"]:.4f}')}
+      {T.stat("S_l / S_max",
+              f'{report["S_l_ratio"]*100:.2f}%')}
+    </div>
+    """
+
+    # ─── Картка для β / S_max (3-й закон) ───
+    Smax_card = f"""
+    <div class="grid cols-3">
+      {T.stat("(1−β) частка паралельних", f'{parallel_share}')}
+      {T.stat("β частка послідовних",      f'{report["beta"]:.4f}')}
+      {T.stat("S_max = 1/β",               f'×{report["S_max"]:.4f}')}
+    </div>
+    <p class="muted" style="margin-top:12px">
+      <b>3-й закон Амдала</b>: при будь-якій кількості процесорів прискорення
+      не перевищить <b>S_max = 1/β</b>. У моєму варіанті
+      β = 1 − {parallel_share} = {report['beta']:.4f}, отже
+      S_max = 1/{report['beta']:.4f} = <b>×{report['S_max']:.2f}</b>.
+    </p>
+    """
+
+    # ─── Картка для S_l (2-й закон) ───
+    Sl_card = f"""
+    <div class="grid cols-3">
+      {T.stat("S_l",   f'×{report["S_l"]:.4f}')}
+      {T.stat("E_l = S_l/l",   f'{report["E_l"]*100:.2f}%')}
+      {T.stat("S_l / S_max",   f'{report["S_l_ratio"]*100:.2f}%')}
+    </div>
+    <p class="muted" style="margin-top:12px">
+      <b>2-й закон Амдала</b>: S_l = l / (β·l + (1 − β)) =
+      <span class="kbd">{l}</span> / ({report['beta']:.4f}·{l} +
+      {1-report['beta']:.4f}) =
+      <span class="kbd">{l}</span> / <span class="kbd">{report['beta']*l + (1-report['beta']):.4f}</span>
+      = <span class="kbd">×{report['S_l']:.4f}</span>.<br>
+      <b>Відношення</b>: S_l / S_max = {report['S_l']:.4f} / {report['S_max']:.4f} =
+      <b>{report['S_l_ratio']*100:.2f}%</b> від теоретичного максимуму.
+    </p>
+    """
+
+    # ─── Картка для діапазону l ───
+    l_max_str = (str(report["l_compat_max"])
+                 if report["l_compat_max"] != float("inf") else "∞")
+    range_card = f"""
+    <div class="grid cols-3">
+      {T.stat(f"a₁·S_max ({a1}%)", f'×{report["S_at_a1"]:.4f}')}
+      {T.stat(f"a₂·S_max ({a2}%)", f'×{report["S_at_a2"]:.4f}')}
+      {T.stat("Сумісне l", f'[{report["l_compat_min"]}, {l_max_str}]')}
+    </div>
+    <p class="muted" style="margin-top:12px">
+      <b>Зворотна задача</b>: знайти l, при якому S_l ∈ [a₁·S_max, a₂·S_max].
+      З формули l ≥ a · (1−β) / (β · (1−a)) маємо:<br>
+      • для <b>a₁ = {a1}%</b>: l ≥ {a1/100} · {1-report['beta']:.4f} /
+      ({report['beta']:.4f} · {1-a1/100:.4f}) =
+      <span class="kbd">{report['l_compat_min']}</span><br>
+      • для <b>a₂ = {a2}%</b>: l ≤ {a2/100} · {1-report['beta']:.4f} /
+      ({report['beta']:.4f} · {1-a2/100:.4f}) =
+      <span class="kbd">{l_max_str}</span><br>
+      <b>Сумісний діапазон</b>: l ∈
+      <span class="kbd">[{report['l_compat_min']}, {l_max_str}]</span>
+      процесорів дають прискорення в потрібному проміжку.
+    </p>
+    """
+
+    # ─── Картка несумісності ───
+    if report["is_compatible"]:
+        compat_html = T.alert(report["compat_reason"], "ok")
+        non_compat_l = report["non_compat_l"]
+        non_compat_html = f"""
+        <h3 style="margin-top:14px">Несумісний варіант (для контрасту)</h3>
+        <p class="lead">Варіант сумісний → за п.7 завдання запропоновано
+           заздалегідь несумісний варіант для порівняння. Наприклад,
+           при <b>l = {non_compat_l}</b> прискорення вийде поза діапазоном
+           [{a1}%, {a2}%].</p>
+        """
+    else:
+        compat_html = T.alert(report["compat_reason"], "warn")
+        non_compat_html = ""
+
+    # ─── Сумісна пропозиція ───
+    suggestion_html = f"""
+    <h3>Стратегія А · збільшити кількість процесорів</h3>
+    <p class="lead">Зберегти вхідні дані (β, a₁, a₂), змінити лише l →
+       <b>l = {report['suggestion_l']}</b> (мінімум для досягнення {a1}%).
+       Тоді S_l = {report['suggestion_l']/(report['beta']*report['suggestion_l'] + (1-report['beta'])):.4f},
+       це ≥ {a1}% від S_max.</p>
+
+    <h3 style="margin-top:14px">Стратегія Б · зменшити частку послідовних β</h3>
+    <p class="lead">Зберегти l = {l} і a₁, a₂. Замість β = {report['beta']:.4f}
+       взяти <b>β = {report['suggestion_beta']:.4f}</b>
+       (тобто частку паралельних піднести до
+       <b>{report['suggestion_parallel']:.4f} = {report['suggestion_parallel']*100:.1f}%</b>).
+       Тоді при l = {l} буде досягнуто рівно {a1}% від оновленого S_max.</p>
+    """
+
+    # ─── Таблиця S_l для різних l (з графіка) ───
+    s_table_rows = []
+    for row in report["s_table"]:
+        markers = []
+        if row["is_current"]:
+            markers.append('<span class="tag indigo">поточне l</span>')
+        if row["is_l_min"]:
+            markers.append('<span class="tag green">l_min</span>')
+        if row["is_l_max"]:
+            markers.append('<span class="tag green">l_max</span>')
+        s_table_rows.append([
+            row["l"],
+            f'×{row["S_l"]:.4f}',
+            f'{row["ratio"]*100:.2f}%',
+            ' '.join(markers) if markers else '—',
+        ])
+    s_table = T.table(
+        ["l (процесорів)", "S_l", "S_l / S_max", "Маркер"],
+        s_table_rows
+    )
+
+    # ─── Підсумкова таблиця (за п.8 завдання) ───
+    summary_html = f"""
+    <h3>Заданий варіант №{variant_id} vs запропонований</h3>
+    <table>
+      <thead><tr>
+        <th>Характеристика</th>
+        <th>Заданий №{variant_id}</th>
+        <th>Запропонований</th>
+      </tr></thead>
+      <tbody>
+        <tr><td>Частка паралельних обчислень (1−β)</td>
+            <td>{parallel_share}</td>
+            <td>{report['suggestion_parallel']:.4f} (стратегія Б)</td></tr>
+        <tr><td>Кількість процесорів l</td>
+            <td>{l}</td>
+            <td>{report['suggestion_l']} (стратегія А)</td></tr>
+        <tr><td>S_max = 1/β</td>
+            <td>×{report['S_max']:.4f}</td>
+            <td>×{1/report['suggestion_beta'] if report['suggestion_beta'] else 0:.4f} (за β з стратегії Б)</td></tr>
+        <tr><td>S_l = l/(β·l + 1−β)</td>
+            <td>×{report['S_l']:.4f} ({report['S_l_ratio']*100:.2f}%)</td>
+            <td>×{report['suggestion_l']/(report['beta']*report['suggestion_l'] + (1-report['beta'])):.4f} (≥{a1}%)</td></tr>
+        <tr><td>Потрібний діапазон S_l</td>
+            <td>{a1}% – {a2}% від S_max</td>
+            <td>той самий</td></tr>
+      </tbody>
+    </table>
+    """
+
+    # ─── Форма ───
+    variant_options = "".join(
+        f'<option value="{vid}"{" selected" if vid == variant_id else ""}>'
+        f'Варіант {vid} · (1−β)={vinfo["parallel_share"]}, l={vinfo["l"]}, '
+        f'{vinfo["a1"]}%-{vinfo["a2"]}%</option>'
+        for vid, vinfo in L8.VARIANTS.items()
+    )
+    form_html = f"""
+    <form method="POST" action="/lab8">
+      <label style="display:block;margin-bottom:10px">
+        <span class="muted" style="font-size:.85rem">Варіант (з Таблиць PDF)</span><br>
+        <select name="variant" style="padding:8px 10px;font-size:.95rem;
+                                     border:1px solid #cbd5e1;border-radius:8px;
+                                     min-width:380px">
+          {variant_options}
+        </select>
+      </label>
+      <div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:8px">
+        <label style="display:flex;flex-direction:column;gap:2px;min-width:140px">
+          <span class="muted" style="font-size:.78rem">(1−β) частка паралельних</span>
+          <input type="number" name="parallel_share" step="0.01" min="0.01" max="0.99"
+                 value="{parallel_share}" required
+                 style="padding:6px 8px;font-size:.9rem">
+        </label>
+        <label style="display:flex;flex-direction:column;gap:2px;min-width:120px">
+          <span class="muted" style="font-size:.78rem">l (процесорів)</span>
+          <input type="number" name="l" min="1" value="{l}" required
+                 style="padding:6px 8px;font-size:.9rem">
+        </label>
+        <label style="display:flex;flex-direction:column;gap:2px;min-width:120px">
+          <span class="muted" style="font-size:.78rem">a₁ (%)</span>
+          <input type="number" name="a1" step="1" min="1" max="99"
+                 value="{a1}" required
+                 style="padding:6px 8px;font-size:.9rem">
+        </label>
+        <label style="display:flex;flex-direction:column;gap:2px;min-width:120px">
+          <span class="muted" style="font-size:.78rem">a₂ (%)</span>
+          <input type="number" name="a2" step="1" min="1" max="99"
+                 value="{a2}" required
+                 style="padding:6px 8px;font-size:.9rem">
+        </label>
+      </div>
+      <p class="muted" style="margin-top:8px;font-size:.82rem">
+        Підказка: при зміні варіанта (1−β), l, a₁, a₂ підставляються автоматично з PDF.
+      </p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn" type="submit">Розрахувати</button>
+        <a class="btn secondary" href="/lab8">Скинути до варіанта 8</a>
+      </div>
+    </form>
+    """
+
+    err_html = T.alert(error, "warn") if error else ""
+
+    body = f"""
+{err_html}
+
+<div class="card">
+  <h2>Постановка задачі</h2>
+  <p class="lead">Дано алгоритм, де <b>(1−β)</b> — частка паралельних обчислень,
+     і систему з <b>l однакових універсальних процесорів</b>. Треба:</p>
+  <ol style="margin-left:24px;line-height:1.8;color:#334155">
+    <li>Знайти <b>максимально можливе прискорення S_l</b> при заданому l (2-й закон Амдала)</li>
+    <li>Знайти <b>кількість процесорів</b>, що забезпечує від <b>a₁</b> до <b>a₂</b>
+        від S_max (3-й закон Амдала)</li>
+    <li>Знайти <b>несумісність</b> при заданих даних, її <b>причини</b></li>
+    <li>Запропонувати свій <b>сумісний варіант</b></li>
+  </ol>
+  <p>За варіантом 8 (Таблиця 1): (1−β) = 0.75, l = 12, потрібно 85%–95% від S_max.</p>
+</div>
+
+<div class="card" style="border-left:4px solid #4f46e5">
+  <h2>Підсумок · головні результати</h2>
+  {main_kpi}
+</div>
+
+<div class="card">
+  <h2>1. β і S_max (3-й закон Амдала)</h2>
+  {Smax_card}
+</div>
+
+<div class="card" style="border-left:4px solid #4f46e5">
+  <h2>2. S_l — прискорення при l = {l} (2-й закон Амдала)</h2>
+  {Sl_card}
+</div>
+
+<div class="card" style="border-left:4px solid #4f46e5">
+  <h2>3. Кількість процесорів l для діапазону {a1}%–{a2}%</h2>
+  {range_card}
+</div>
+
+<div class="card">
+  <h2>Графік S_l(l) з межами діапазону</h2>
+  <p class="lead">Крива — прискорення S_l як функція кількості процесорів.
+     Червона пунктирна лінія — теоретична межа S_max. Жовті — рівні
+     a₁·S_max і a₂·S_max. Зелена зона — сумісний діапазон l. Точка — поточне l.</p>
+  {plot}
+</div>
+
+<div class="card">
+  <h2>Таблиця S_l для різних l</h2>
+  {s_table}
+</div>
+
+<div class="card">
+  <h2>4-5. Несумісність та її причини</h2>
+  {compat_html}
+  {non_compat_html}
+</div>
+
+<div class="card">
+  <h2>6. Запропонований сумісний варіант</h2>
+  {suggestion_html}
+</div>
+
+<div class="card">
+  <h2>8. Підсумкова таблиця (заданий vs запропонований)</h2>
+  {summary_html}
+</div>
+
+<div class="card">
+  <h2>11. Інтерактивне введення даних</h2>
+  <p class="lead">Можна обрати інший варіант з випадаючого списку — (1−β),
+     l, a₁, a₂ підставляться автоматично з таблиць PDF. Або ввести свої значення.</p>
+  {form_html}
+</div>
+"""
+    return T.page("Лаб.8 · Амдал", body, active="home_l8",
+                  lab_num=8, tabs=T.LAB8_TABS)
+
+
+# ---------------------------------------------------------------------------
 # Допоміжні функції відповіді
 # ---------------------------------------------------------------------------
 def _send_html(handler: BaseHTTPRequestHandler, html: str, status: int = 200):
@@ -1771,6 +2110,8 @@ class handler(BaseHTTPRequestHandler):
                 _send_html(self, render_lab6()); return
             if path == "/lab7":
                 _send_html(self, render_lab7()); return
+            if path == "/lab8":
+                _send_html(self, render_lab8()); return
             if path == "/data":
                 _send_html(self, render_data()); return
             if path == "/distributed":
@@ -1833,6 +2174,16 @@ class handler(BaseHTTPRequestHandler):
                     _send_html(self, render_lab7(figure_id=fig_id, N=N, n=n, s=s))
                 except ValueError as exc:
                     _send_html(self, render_lab7(error=str(exc)))
+                return
+            if path == "/lab8":
+                params = parse_qs(raw)
+                try:
+                    var_id, parallel, l, a1, a2 = L8.parse_form(params)
+                    _send_html(self, render_lab8(
+                        variant_id=var_id, parallel_share=parallel,
+                        l=l, a1=a1, a2=a2))
+                except ValueError as exc:
+                    _send_html(self, render_lab8(error=str(exc)))
                 return
             _send_html(self, _error_page("Метод POST для цього шляху не підтримується."), 405)
         except Exception as exc:  # pragma: no cover
